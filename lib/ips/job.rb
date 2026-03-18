@@ -84,27 +84,31 @@ module IPS
       Timing.clean_env
 
       cycles = @timing[item]
-      measurements = [] # [start_ns, end_ns] pairs
+      times = []  # flat: [start0, end0, start1, end1, ...]
+      gc_times = [] # flat: [gc_before0, gc_after0, ...]
       iter = 0
 
       target = Timing.add_second(Timing.now, @time)
 
       begin
+        gc0 = GC.total_time
         t0 = Timing.now
         item.call_times(cycles)
         t1 = Timing.now
+        gc1 = GC.total_time
 
         elapsed_ns = t1 - t0
         next if elapsed_ns <= 0
 
         iter += cycles
-        measurements << [t0, t1]
+        times << t0 << t1
+        gc_times << gc0 << gc1
 
-        total_ns = measurements.last[1] - measurements.first[0]
+        total_ns = t1 - times[0]
         display.progress(estimate: Timing::NANOSECONDS_PER_SECOND * (iter.to_f / total_ns))
       end while Timing.now < target
 
-      Result.new(item.label, cycles, measurements)
+      Result.new(item.label, cycles, times, gc_times)
     end
   end
 end
