@@ -4,7 +4,7 @@ require_relative "lib/ips/version"
 
 Gem::Specification.new do |spec|
   spec.name = "ips"
-  spec.version = Ips::VERSION
+  spec.version = IPS::VERSION
   spec.authors = ["John Hawthorn"]
   spec.email = ["john@hawthorn.email"]
 
