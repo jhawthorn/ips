@@ -10,11 +10,12 @@ module IPS
 
     attr_accessor :warmup, :time
 
-    def initialize(time: 5, warmup: 2)
+    def initialize(time: 5, warmup: 2, out: $stdout)
       @list = []
       @time = time
       @warmup = warmup
       @timing = {}
+      @out = out
     end
 
     def report(label, &block)
@@ -23,7 +24,7 @@ module IPS
     end
 
     def run
-      display = Display.new(@list.map(&:label))
+      display = Display.new(@list.map(&:label), out: @out)
       total_ns = ((@warmup + @time) * Timing::NANOSECONDS_PER_SECOND).to_i
 
       results = @list.map do |item|

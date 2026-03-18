@@ -4,10 +4,11 @@ module IPS
   class Display
     BAR_WIDTH = 30
 
-    def initialize(labels)
+    def initialize(labels, out: $stdout)
+      @out = out
       @max_label = labels.map(&:size).max
       @max_label = 20 if @max_label < 20
-      @tty = $stdout.tty?
+      @tty = @out.tty?
     end
 
     def start_item(label, total_ns)
@@ -27,13 +28,13 @@ module IPS
       remaining_s = remaining_ns > 0 ? (remaining_ns.to_f / Timing::NANOSECONDS_PER_SECOND).ceil : 0
       bar = "█" * filled + "░" * empty
       est = estimate ? "%10s i/s" % format_ips(estimate) : "              "
-      $stdout.print "\r%#{@max_label}s: %s %s ETA %ds " % [@item_label, est, bar, remaining_s]
-      $stdout.flush
+      @out.print "\r%#{@max_label}s: %s %s ETA %ds " % [@item_label, est, bar, remaining_s]
+      @out.flush
     end
 
     def finish_item(result)
-      $stdout.print "\r\e[2K" if @tty
-      $stdout.printf "%#{@max_label}s: %10s i/s (±%4.1f%%)\n",
+      @out.print "\r\e[2K" if @tty
+      @out.printf "%#{@max_label}s: %10s i/s (±%4.1f%%)\n",
         result.label, format_ips(result.ips), result.error_pct
     end
 
@@ -43,13 +44,13 @@ module IPS
       sorted = results.sort_by { |r| -r.ips }
       best = sorted.first
 
-      $stdout.puts "\nSummary"
-      $stdout.puts "  #{best.label} ran"
+      @out.puts "\nSummary"
+      @out.puts "  #{best.label} ran"
 
       sorted[1..].each do |r|
         ratio = best.ips / r.ips
         ratio_error = ratio * Math.sqrt((best.stddev / best.ips)**2 + (r.stddev / r.ips)**2)
-        $stdout.printf "    %.2f ± %.2f times faster than %s\n",
+        @out.printf "    %.2f ± %.2f times faster than %s\n",
           ratio, ratio_error, r.label
       end
     end
