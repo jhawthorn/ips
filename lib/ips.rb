@@ -2,6 +2,7 @@
 
 require "ips/version"
 require "ips/timing"
+require "ips/display"
 require "ips/job"
 
 module IPS
