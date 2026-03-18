@@ -1,34 +1,47 @@
-# Ips
+# IPS
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/ips`. To experiment with that code, run `bin/console` for an interactive prompt.
+A Ruby benchmarking tool that measures iterations per second with statistical analysis, automatic warmup, and comparison summaries.
 
 ## Installation
-
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
 
 Install the gem and add to the application's Gemfile by executing:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle add ips
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install ips
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+require "ips"
 
-## Development
+IPS.run do |x|
+  x.report("addition")       { 1 + 1 }
+  x.report("multiplication") { 2 * 3 }
+  x.report("wtf") { eval("#{1.to_s} + #{1.to_s}") }
+end
+```
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+Output:
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+```
+            addition:    45.759M i/s (± 1.2%)
+      multiplication:    45.593M i/s (± 0.2%)
+                 wtf:   463.420k i/s (± 0.9%, GC  6.3%)
+
+Summary
+  addition ran
+    1.00 ± 0.01 times faster than multiplication
+    98.74 ± 1.49 times faster than wtf
+```
+
+When two or more items are reported, a comparison summary is automatically displayed.
 
 ## Contributing
 
@@ -40,4 +53,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the Ips project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/jhawthorn/ips/blob/main/CODE_OF_CONDUCT.md).
+Everyone interacting in the IPS project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/jhawthorn/ips/blob/main/CODE_OF_CONDUCT.md).
