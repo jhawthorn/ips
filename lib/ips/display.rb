@@ -35,8 +35,9 @@ module IPS
     def finish_item(result)
       @out.print "\r\e[2K" if @tty
       gc = result.gc_pct >= 1.0 ? ", GC %4.1f%%" % result.gc_pct : ""
-      @out.printf "%#{@max_label}s: %10s i/s (±%4.1f%%%s)\n",
-        result.label, format_ips(result.ips), result.error_pct, gc
+      error = result.error_pct > 100 ? ">100" : "%4.1f" % result.error_pct
+      @out.printf "%#{@max_label}s: %10s i/s (±%s%%%s)\n",
+        result.label, format_ips(result.ips), error, gc
     end
 
     def summary(results)
