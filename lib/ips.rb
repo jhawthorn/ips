@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "ips/version"
-require_relative "ips/timing"
-require_relative "ips/job"
+require "ips/version"
+require "ips/timing"
+require "ips/job"
 
 module IPS
   def self.run(time: 5, warmup: 2)

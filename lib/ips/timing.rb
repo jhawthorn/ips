@@ -2,18 +2,15 @@
 
 module IPS
   module Timing
-    MICROSECONDS_PER_SECOND = 1_000_000
+    NANOSECONDS_PER_SECOND = 1_000_000_000
+    NANOSECONDS_PER_100MS = 100_000_000
 
     def self.now
-      Process.clock_gettime(Process::CLOCK_MONOTONIC, :float_microsecond)
-    end
-
-    def self.time_us(before, after)
-      after - before
+      Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
     end
 
     def self.add_second(t, s)
-      t + (s * MICROSECONDS_PER_SECOND)
+      t + (s * NANOSECONDS_PER_SECOND).to_i
     end
 
     def self.clean_env
