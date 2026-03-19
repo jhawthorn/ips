@@ -10,12 +10,13 @@ module IPS
 
     attr_accessor :warmup, :time
 
-    def initialize(time: 5, warmup: time * 0.2, summary: true, debug: false, out: $stdout)
+    def initialize(time: 5, warmup: time * 0.2, summary: true, debug: false, frozen_string_literal: true, out: $stdout)
       @list = []
       @time = time
       @warmup = warmup
       @summary = summary
       @debug = debug
+      @frozen_string_literal = frozen_string_literal
       @timing = {}
       @out = out
     end
@@ -23,7 +24,7 @@ module IPS
     def report(label, action = nil, &block)
       raise ArgumentError, "cannot specify both action and block" if action && block
       action ||= block || label
-      @list.push Entry.new(label, action)
+      @list.push Entry.new(label, action, frozen_string_literal: @frozen_string_literal)
       self
     end
 

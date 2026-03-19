@@ -5,9 +5,10 @@ module IPS
     class Entry
       attr_reader :label, :source
 
-      def initialize(label, action)
+      def initialize(label, action, frozen_string_literal:)
         @label = label
         @source = nil
+        @frozen_string_literal = frozen_string_literal
 
         if action.kind_of?(String)
           compile_string(action)
@@ -21,7 +22,7 @@ module IPS
       private
 
       def compile_string(str)
-        @source = <<-CODE.gsub(/^          /, "")
+        @source = <<~RUBY
           def call_times(__total)
             __i = 0
             while __i < __total
@@ -29,9 +30,10 @@ module IPS
               __i += 1
             end
           end
-        CODE
+        RUBY
+        eval_source = "# frozen_string_literal: #{@frozen_string_literal}\n#{@source}"
         m = (class << self; self; end)
-        m.class_eval(@source)
+        m.class_eval(eval_source)
       end
 
       def define_call_times_block(act)
