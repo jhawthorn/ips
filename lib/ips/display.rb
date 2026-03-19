@@ -42,22 +42,32 @@ module IPS
 
     def summary(results)
       return if results.size < 2
+      pairs = results.map { |r| [r.label, r] }
+      Display.compare(pairs, out: @out)
+    end
 
-      sorted = results.sort_by { |r| -r.ips }
-      best = sorted.first
+    def self.compare(pairs, out: $stdout)
+      return if pairs.size < 2
 
-      @out.puts "\nSummary"
-      @out.puts "  #{best.label} ran"
+      sorted = pairs.sort_by { |_, e| -e.ips }
+      best_label, best = sorted.first
 
-      sorted[1..].each do |r|
-        ratio = best.ips / r.ips
-        ratio_error = ratio * Math.sqrt((best.stddev / best.ips)**2 + (r.stddev / r.ips)**2)
-        @out.printf "    %.2f ± %.2f times faster than %s\n",
-          ratio, ratio_error, r.label
+      out.puts "\nSummary"
+      out.puts "  #{best_label} ran"
+
+      sorted[1..].each do |label, entry|
+        ratio = best.ips / entry.ips
+        ratio_error = ratio * Math.sqrt((best.stddev / best.ips)**2 + (entry.stddev / entry.ips)**2)
+        out.printf "    %.2f ± %.2f times faster than %s\n",
+          ratio, ratio_error, label
       end
     end
 
     def format_ips(ips)
+      Display.format_ips(ips)
+    end
+
+    def self.format_ips(ips)
       if ips >= 1_000_000_000
         "%.3fB" % (ips / 1_000_000_000.0)
       elsif ips >= 1_000_000

@@ -6,8 +6,8 @@ require "ips/display"
 require "ips/job"
 
 module IPS
-  def self.run(time: 5, warmup: 2, out: $stdout)
-    job = Job.new(time: time, warmup: warmup, out: out)
+  def self.run(time: 5, warmup: 2, summary: true, out: $stdout)
+    job = Job.new(time: time, warmup: warmup, summary: summary, out: out)
     yield job
     job.run
   end

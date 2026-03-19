@@ -4,6 +4,7 @@
 versions = []
 inline_code = []
 ruby_flags = []
+save_path = nil
 args = ARGV.dup
 while args.first
   case args.first
@@ -18,6 +19,9 @@ while args.first
     ruby_flags.push("-r", args.shift)
   when "--disable-gems", /\A--yjit/, /\A--zjit/
     ruby_flags << args.shift
+  when "--save"
+    args.shift
+    save_path = args.shift
   when "-v", "--verbose"
     args.shift
     verbose = true
@@ -36,11 +40,13 @@ if script.nil? && inline_code.empty?
 end
 
 if inline_code.any?
-  script_source = +"require 'ips'\nIPS.run do |x|\n"
+  run_opts = versions.size > 1 ? "(summary: false)" : ""
+  script_source = +"require 'ips'\nresult = IPS.run#{run_opts} do |x|\n"
   inline_code.each do |code|
     script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
   end
   script_source << "end\n"
+  script_source << "IO.open(3, 'w') { |f| Marshal.dump(result, f) }\n"
   ruby_args = ["-e", script_source]
 else
   ruby_args = [script]
@@ -85,6 +91,11 @@ else
   rubies = versions.map { |v| resolve_ruby(v) }
 end
 
+$LOAD_PATH.unshift(LIB_DIR)
+require "ips"
+
+results = []
+
 rubies.each do |ruby, extra_flags|
   if ruby
     env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
@@ -95,6 +106,20 @@ rubies.each do |ruby, extra_flags|
 
   cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
   $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
-  system(env, *cmd, exception: true)
+
+  rd, wr = IO.pipe
+  pid = spawn(env, *cmd, 3 => wr)
+  wr.close
+  data = rd.read
+  rd.close
+  Process.wait(pid)
+  raise "Child process failed" unless $?.success?
+  results << Marshal.load(data) unless data.empty?
   puts
+end
+
+IPS::Result.compare(results)
+
+if save_path && results.any?
+  IPS::Result.save!(save_path, results)
 end

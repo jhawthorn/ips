@@ -10,10 +10,11 @@ module IPS
 
     attr_accessor :warmup, :time
 
-    def initialize(time: 5, warmup: 2, out: $stdout)
+    def initialize(time: 5, warmup: 2, summary: true, out: $stdout)
       @list = []
       @time = time
       @warmup = warmup
+      @summary = summary
       @timing = {}
       @out = out
     end
@@ -37,7 +38,8 @@ module IPS
         result
       end
 
-      display.summary(results)
+      display.summary(results) if @summary
+      Result.build(results)
     end
 
     private
@@ -110,7 +112,7 @@ module IPS
         display.progress(estimate: Timing::NANOSECONDS_PER_SECOND * (iter.to_f / total_ns))
       end while Timing.now < target
 
-      Result.new(item.label, cycles, times, gc_times)
+      Result::Entry.new(item.label, cycles, times, gc_times)
     end
   end
 end
