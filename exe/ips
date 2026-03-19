@@ -16,9 +16,8 @@ while args.first
   when "-r"
     args.shift
     ruby_flags.push("-r", args.shift)
-  when "--disable-gems"
-    args.shift
-    ruby_flags << "--disable-gems"
+  when "--disable-gems", /\A--yjit/, /\A--zjit/
+    ruby_flags << args.shift
   when "-v", "--verbose"
     args.shift
     verbose = true
@@ -70,21 +69,23 @@ def find_ruby(version)
   nil
 end
 
-def resolve_ruby(version)
+def resolve_ruby(str)
+  version, *extra_flags = str.split
   if File.executable?(version)
-    version
+    ruby = version
   else
-    find_ruby(version) or abort "No ruby found matching #{version.inspect}"
+    ruby = find_ruby(version) or abort "No ruby found matching #{version.inspect}"
   end
+  [ruby, extra_flags]
 end
 
 if versions.empty?
-  rubies = [nil]
+  rubies = [[nil, []]]
 else
   rubies = versions.map { |v| resolve_ruby(v) }
 end
 
-rubies.each do |ruby|
+rubies.each do |ruby, extra_flags|
   if ruby
     env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
   else
@@ -92,7 +93,7 @@ rubies.each do |ruby|
     env = {}
   end
 
-  cmd = [ruby, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
+  cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
   $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
   system(env, *cmd, exception: true)
   puts
