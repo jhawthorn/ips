@@ -11,6 +11,10 @@ module IPS
     yield job
     job.run
   end
+
+  class << self
+    alias_method :ips, :run
+  end
 end
 
 Ips = IPS
