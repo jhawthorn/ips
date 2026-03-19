@@ -1,16 +1,8 @@
 # IPS
 
-A Ruby benchmarking tool that measures iterations per second with statistical analysis, automatic warmup, and comparison summaries.
+![demo](demo.gif)
 
 ## Installation
-
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add ips
-```
-
-If bundler is not being used to manage dependencies, install the gem by executing:
 
 ```bash
 gem install ips
@@ -18,30 +10,45 @@ gem install ips
 
 ## Usage
 
+### Library
+
 ```ruby
 require "ips"
 
 IPS.run do |x|
-  x.report("addition")       { 1 + 1 }
-  x.report("multiplication") { 2 * 3 }
-  x.report("wtf") { eval("#{1.to_s} + #{1.to_s}") }
+  x.report("split/join") { "hello world".split(" ").join("-") }
+  x.report("gsub")       { "hello world".gsub(" ", "-") }
 end
 ```
 
-Output:
+### CLI
 
 ```
-            addition:    45.759M i/s (± 1.2%)
-      multiplication:    45.593M i/s (± 0.2%)
-                 wtf:   463.420k i/s (± 0.9%, GC  6.3%)
-
-Summary
-  addition ran
-    1.00 ± 0.01 times faster than multiplication
-    98.74 ± 1.49 times faster than wtf
+$ ips -e '"hello world".split(" ").join("-")' -e '"hello world".gsub(" ", "-")'
 ```
 
-When two or more items are reported, a comparison summary is automatically displayed.
+Compare across Ruby versions:
+
+```
+$ ips --ruby 3.4 --ruby 4.0 -e 'Object.new'
+```
+
+Compare across Ruby versions, arguments, and commands:
+
+```
+$ ips --ruby '3.4' --ruby '3.4 --yjit' --ruby '4.0' --ruby '4.0 --yjit' -e 'Object.new' -e 'Object.allocate'
+```
+
+Options:
+
+- `--ruby VERSION` — run against a specific Ruby (repeatable)
+- `-e CODE` — inline benchmark expression (repeatable)
+- `-t SECONDS` — benchmark time (default: 5)
+- `-w SECONDS` — warmup time (default: 20% of benchmark time)
+- `--save PATH` — save results to JSON (appends to existing file)
+- `--debug` — show compiled source, cycle counts, and per-batch timing
+- `--yjit`, `--zjit`, `--disable-gems` — passed through to Ruby
+- `-r LIB` — require a library before running
 
 ## Contributing
 
