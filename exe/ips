@@ -5,6 +5,8 @@ versions = []
 inline_code = []
 ruby_flags = []
 save_path = nil
+bench_time = nil
+warmup_time = nil
 args = ARGV.dup
 while args.first
   case args.first
@@ -22,6 +24,12 @@ while args.first
   when "--save"
     args.shift
     save_path = args.shift
+  when "-t"
+    args.shift
+    bench_time = args.shift.to_f
+  when "-w"
+    args.shift
+    warmup_time = args.shift.to_f
   when "-v", "--verbose"
     args.shift
     verbose = true
@@ -40,8 +48,12 @@ if script.nil? && inline_code.empty?
 end
 
 if inline_code.any?
-  run_opts = versions.size > 1 ? "(summary: false)" : ""
-  script_source = +"require 'ips'\nresult = IPS.run#{run_opts} do |x|\n"
+  run_opts = []
+  run_opts << "summary: false" if versions.size > 1
+  run_opts << "time: #{bench_time}" if bench_time
+  run_opts << "warmup: #{warmup_time}" if warmup_time
+  run_opts_str = run_opts.any? ? "(#{run_opts.join(", ")})" : ""
+  script_source = +"require 'ips'\nresult = IPS.run#{run_opts_str} do |x|\n"
   inline_code.each do |code|
     script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
   end

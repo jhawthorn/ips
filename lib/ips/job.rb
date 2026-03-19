@@ -10,7 +10,7 @@ module IPS
 
     attr_accessor :warmup, :time
 
-    def initialize(time: 5, warmup: 2, summary: true, out: $stdout)
+    def initialize(time: 5, warmup: time * 0.2, summary: true, out: $stdout)
       @list = []
       @time = time
       @warmup = warmup
