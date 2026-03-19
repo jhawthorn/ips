@@ -2,20 +2,40 @@
 # frozen_string_literal: true
 
 versions = []
+inline_code = []
 args = ARGV.dup
-while args.first == "--ruby"
-  args.shift
-  versions << args.shift
+while args.first
+  case args.first
+  when "--ruby"
+    args.shift
+    versions << args.shift
+  when "-e"
+    args.shift
+    inline_code << args.shift
+  else
+    break
+  end
 end
 script = args.shift
 
-if script.nil?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] <script>"
+if script.nil? && inline_code.empty?
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [-e CODE ...] [<script>]"
   exit 1
 end
 
+if inline_code.any?
+  script_source = +"require 'ips'\nIPS.run do |x|\n"
+  inline_code.each do |code|
+    script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
+  end
+  script_source << "end\n"
+  ruby_args = ["-e", script_source]
+else
+  ruby_args = [script]
+end
+
 if versions.empty?
-  exec("ruby", script)
+  exec("ruby", "-I#{File.expand_path("../lib", __dir__)}", *ruby_args)
 end
 
 RUBY_DIRS = [File.expand_path("~/.rubies"), "/opt/rubies"]
@@ -42,10 +62,9 @@ versions.each do |version|
     exit 1
   end
 
-  name, ruby = result
-  puts "=== #{name} ==="
+  _name, ruby = result
 
   env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
-  system(env, ruby, "-I#{LIB_DIR}", script, exception: true)
+  system(env, ruby, "-v", "-I", LIB_DIR, *ruby_args, exception: true)
   puts
 end
