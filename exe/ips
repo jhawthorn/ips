@@ -7,6 +7,7 @@ ruby_flags = []
 save_path = nil
 bench_time = nil
 warmup_time = nil
+debug = false
 args = ARGV.dup
 while args.first
   case args.first
@@ -30,6 +31,9 @@ while args.first
   when "-w"
     args.shift
     warmup_time = args.shift.to_f
+  when "--debug"
+    args.shift
+    debug = true
   when "-v", "--verbose"
     args.shift
     verbose = true
@@ -52,6 +56,7 @@ if inline_code.any?
   run_opts << "summary: false" if versions.size > 1
   run_opts << "time: #{bench_time}" if bench_time
   run_opts << "warmup: #{warmup_time}" if warmup_time
+  run_opts << "debug: true" if debug
   run_opts_str = run_opts.any? ? "(#{run_opts.join(", ")})" : ""
   script_source = +"require 'ips'\nresult = IPS.run#{run_opts_str} do |x|\n"
   inline_code.each do |code|
@@ -121,7 +126,6 @@ rubies.each do |version_str, ruby, extra_flags|
 
   cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
   $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
-
   rd, wr = IO.pipe
   pid = spawn(env, *cmd, 3 => wr)
   wr.close

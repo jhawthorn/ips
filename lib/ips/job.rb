@@ -10,11 +10,12 @@ module IPS
 
     attr_accessor :warmup, :time
 
-    def initialize(time: 5, warmup: time * 0.2, summary: true, out: $stdout)
+    def initialize(time: 5, warmup: time * 0.2, summary: true, debug: false, out: $stdout)
       @list = []
       @time = time
       @warmup = warmup
       @summary = summary
+      @debug = debug
       @timing = {}
       @out = out
     end
@@ -27,10 +28,16 @@ module IPS
     end
 
     def run
-      display = Display.new(@list.map(&:label), out: @out)
+      display = Display.new(@list.map(&:label), out: @out, debug: @debug)
       total_ns = ((@warmup + @time) * Timing::NANOSECONDS_PER_SECOND).to_i
 
       results = @list.map do |item|
+        if @debug
+          source = item.source
+          @out.puts "--- #{item.label} ---"
+          @out.puts source if source
+          @out.puts
+        end
         display.start_item(item.label, total_ns)
         warmup_item(item, display)
         result = measure_item(item, display)
@@ -73,6 +80,7 @@ module IPS
       per_100ms = cycles_per_100ms(warmup_ns, warmup_iter)
       cycles = per_100ms > MAX_ITERATIONS ? MAX_ITERATIONS : per_100ms
       @timing[item] = cycles
+      @out.puts "  cycles: #{cycles}" if @debug
 
       target = Timing.add_second(before, @warmup)
       while Timing.now + Timing::NANOSECONDS_PER_100MS < target
@@ -107,6 +115,13 @@ module IPS
         iter += cycles
         times << t0 << t1
         gc_times << gc0 << gc1
+
+        if @debug
+          batch_ips = Timing::NANOSECONDS_PER_SECOND * (cycles.to_f / elapsed_ns)
+          gc_ns = gc1 - gc0
+          @out.printf "  batch: %.3fms  ips: %s  gc: %.3fms\n",
+            elapsed_ns / 1_000_000.0, Display.format_ips(batch_ips), gc_ns / 1_000_000.0
+        end
 
         total_ns = t1 - times[0]
         display.progress(estimate: Timing::NANOSECONDS_PER_SECOND * (iter.to_f / total_ns))

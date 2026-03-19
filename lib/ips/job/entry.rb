@@ -3,10 +3,11 @@
 module IPS
   class Job
     class Entry
-      attr_reader :label
+      attr_reader :label, :source
 
       def initialize(label, action)
         @label = label
+        @source = nil
 
         if action.kind_of?(String)
           compile_string(action)
@@ -20,8 +21,7 @@ module IPS
       private
 
       def compile_string(str)
-        m = (class << self; self; end)
-        m.class_eval <<-CODE
+        @source = <<-CODE.gsub(/^          /, "")
           def call_times(__total)
             __i = 0
             while __i < __total
@@ -30,6 +30,8 @@ module IPS
             end
           end
         CODE
+        m = (class << self; self; end)
+        m.class_eval(@source)
       end
 
       def define_call_times_block(act)

@@ -4,11 +4,11 @@ module IPS
   class Display
     BAR_WIDTH = 30
 
-    def initialize(labels, out: $stdout)
+    def initialize(labels, out: $stdout, debug: false)
       @out = out
       @max_label = labels.map(&:size).max
       @max_label = 20 if @max_label < 20
-      @tty = @out.tty?
+      @tty = @out.tty? && !debug
     end
 
     def start_item(label, total_ns)
