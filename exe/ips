@@ -3,6 +3,7 @@
 
 versions = []
 inline_code = []
+ruby_flags = []
 args = ARGV.dup
 while args.first
   case args.first
@@ -12,6 +13,18 @@ while args.first
   when "-e"
     args.shift
     inline_code << args.shift
+  when "-r"
+    args.shift
+    ruby_flags.push("-r", args.shift)
+  when "--disable-gems"
+    args.shift
+    ruby_flags << "--disable-gems"
+  when "-v", "--verbose"
+    args.shift
+    verbose = true
+  when /\A-/
+    $stderr.puts "Unknown option: #{args.first}"
+    exit 1
   else
     break
   end
@@ -34,8 +47,10 @@ else
   ruby_args = [script]
 end
 
-if versions.empty?
-  exec("ruby", "-I#{File.expand_path("../lib", __dir__)}", *ruby_args)
+# Shell-escape for display purposes only, not for security.
+def shell_quote(arg)
+  return arg if arg =~ /\A[A-Za-z0-9_\-.,:+\/@]+\z/
+  "'" + arg.gsub("'", "'\\\\''") + "'"
 end
 
 RUBY_DIRS = [File.expand_path("~/.rubies"), "/opt/rubies"]
@@ -48,23 +63,30 @@ def find_ruby(version)
       bare = name.delete_prefix("ruby-")
       if bare.start_with?(version)
         ruby = File.join(dir, name, "bin", "ruby")
-        return [name, ruby] if File.executable?(ruby)
+        return ruby if File.executable?(ruby)
       end
     end
   end
   nil
 end
 
+versions << nil if versions.empty?
+
 versions.each do |version|
-  result = find_ruby(version)
-  if result.nil?
-    $stderr.puts "No ruby found matching #{version.inspect}"
-    exit 1
+  if version
+    ruby = find_ruby(version)
+    if ruby.nil?
+      $stderr.puts "No ruby found matching #{version.inspect}"
+      exit 1
+    end
+    env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
+  else
+    ruby = "ruby"
+    env = {}
   end
 
-  _name, ruby = result
-
-  env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
-  system(env, ruby, "-v", "-I", LIB_DIR, *ruby_args, exception: true)
+  cmd = [ruby, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
+  $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+  system(env, *cmd, exception: true)
   puts
 end
