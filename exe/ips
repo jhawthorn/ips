@@ -70,15 +70,22 @@ def find_ruby(version)
   nil
 end
 
-versions << nil if versions.empty?
+def resolve_ruby(version)
+  if File.executable?(version)
+    version
+  else
+    find_ruby(version) or abort "No ruby found matching #{version.inspect}"
+  end
+end
 
-versions.each do |version|
-  if version
-    ruby = find_ruby(version)
-    if ruby.nil?
-      $stderr.puts "No ruby found matching #{version.inspect}"
-      exit 1
-    end
+if versions.empty?
+  rubies = [nil]
+else
+  rubies = versions.map { |v| resolve_ruby(v) }
+end
+
+rubies.each do |ruby|
+  if ruby
     env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
   else
     ruby = "ruby"
