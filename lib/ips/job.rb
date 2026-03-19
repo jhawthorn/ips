@@ -18,8 +18,10 @@ module IPS
       @out = out
     end
 
-    def report(label, &block)
-      @list.push Entry.new(label, block)
+    def report(label, action = nil, &block)
+      raise ArgumentError, "cannot specify both action and block" if action && block
+      action ||= block || label
+      @list.push Entry.new(label, action)
       self
     end
 

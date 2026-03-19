@@ -12,6 +12,14 @@ module IPS
     job.run
   end
 
+  def self.report(label = nil, action = nil, &block)
+    action ||= block || label || raise(ArgumentError, "no action or block given")
+    label ||= action.is_a?(String) ? action : "block"
+    run do |x|
+      x.report(label, action)
+    end
+  end
+
   class << self
     alias_method :ips, :run
   end
