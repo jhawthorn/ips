@@ -2,7 +2,7 @@
 
 module IPS
   class Result
-    attr_reader :uuid, :ruby_version, :ruby_description, :ruby_executable, :pid, :yjit_enabled, :entries
+    attr_accessor :uuid, :run_label, :ruby_version, :ruby_description, :ruby_executable, :pid, :yjit_enabled, :entries
 
     def initialize(entries, uuid:, ruby_version:, ruby_description:, ruby_executable:, pid:, yjit_enabled:)
       @entries = entries
@@ -19,7 +19,7 @@ module IPS
         uuid: generate_uuid,
         ruby_version: RUBY_VERSION,
         ruby_description: RUBY_DESCRIPTION,
-        ruby_executable: Process.argv0,
+        ruby_executable: nil,
         pid: Process.pid,
         yjit_enabled: defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?)
     end
@@ -94,8 +94,9 @@ module IPS
     end
 
     def self.distinguish(results)
-      [:ruby_version, :ruby_description, :ruby_executable, :uuid].each do |field|
+      [:run_label, :ruby_version, :ruby_description, :ruby_executable, :uuid].each do |field|
         values = results.map { |r| r.send(field) }
+        next if values.any?(&:nil?)
         if values.uniq.size == results.size
           return results.each_with_object({}) { |r, h| h[r.uuid] = r.send(field).to_s }
         end

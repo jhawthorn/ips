@@ -98,9 +98,12 @@ def resolve_ruby(str)
 end
 
 if versions.empty?
-  rubies = [[nil, []]]
+  rubies = [[nil, nil, []]]
 else
-  rubies = versions.map { |v| resolve_ruby(v) }
+  rubies = versions.map { |v|
+    ruby, extra_flags = resolve_ruby(v)
+    [v, ruby, extra_flags]
+  }
 end
 
 $LOAD_PATH.unshift(LIB_DIR)
@@ -108,7 +111,7 @@ require "ips"
 
 results = []
 
-rubies.each do |ruby, extra_flags|
+rubies.each do |version_str, ruby, extra_flags|
   if ruby
     env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
   else
@@ -126,7 +129,12 @@ rubies.each do |ruby, extra_flags|
   rd.close
   Process.wait(pid)
   raise "Child process failed" unless $?.success?
-  results << Marshal.load(data) unless data.empty?
+  unless data.empty?
+    result = Marshal.load(data)
+    result.ruby_executable = ruby
+    result.run_label = "ruby #{version_str}" if version_str
+    results << result
+  end
   puts
 end
 
