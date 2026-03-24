@@ -22,7 +22,7 @@ class TestOutliers < Minitest::Test
     times << t << t + slow_ns
 
     gc_times = Array.new(200, 0)
-    result = IPS::Result.new("stall", cycles, times, gc_times)
+    result = IPS::Result::Entry.new("stall", cycles, times, gc_times)
 
     # Arithmetic mean of per-batch rates would be:
     #   (99 * 1_000_000 + 1 * 1) / 100 ≈ 990_000 i/s
@@ -49,7 +49,7 @@ class TestOutliers < Minitest::Test
     end
 
     gc_times = Array.new(1000, 0)
-    result = IPS::Result.new("periodic_stall", cycles, times, gc_times)
+    result = IPS::Result::Entry.new("periodic_stall", cycles, times, gc_times)
 
     # 500 iterations in ~5s = ~100 i/s
     assert result.ips < 200
