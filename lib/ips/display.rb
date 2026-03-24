@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+begin
+  require "io/console"
+rescue LoadError
+end
+
 module IPS
   class Display
     BAR_WIDTH = 30
@@ -8,7 +13,7 @@ module IPS
       @out = out
       @max_label = labels.map(&:size).max
       @max_label = 20 if @max_label < 20
-      @tty = @out.tty? && !debug
+      @tty = @out.tty? && !debug && terminal_wide_enough?
     end
 
     def start_item(label, total_ns)
@@ -61,6 +66,14 @@ module IPS
         out.printf "    %.2f ± %.2f times faster than %s\n",
           ratio, ratio_error, label
       end
+    end
+
+    def terminal_wide_enough?
+      return true unless @out.respond_to?(:winsize)
+      # label + ": " + estimate + " " + bar + " ETA Ns "
+      min_width = @max_label + 2 + 14 + 1 + BAR_WIDTH + 8
+      _, cols = @out.winsize
+      cols >= min_width
     end
 
     def format_ips(ips)
