@@ -20,7 +20,12 @@ module IPS
       @item_label = label
       @item_start = Timing.now
       @item_total_ns = total_ns
-      progress
+      if @tty
+        progress
+      else
+        @out.print "%#{@max_label}s: " % label
+        @out.flush
+      end
     end
 
     def progress(estimate: nil)
@@ -38,11 +43,16 @@ module IPS
     end
 
     def finish_item(result)
-      @out.print "\r\e[2K" if @tty
       gc = result.gc_pct >= 1.0 ? ", GC %4.1f%%" % result.gc_pct : ""
       error = result.error_pct > 100 ? ">100" : "%4.1f" % result.error_pct
-      @out.printf "%#{@max_label}s: %10s i/s (±%s%%%s)\n",
-        result.label, format_ips(result.ips), error, gc
+      if @tty
+        @out.print "\r\e[2K"
+        @out.printf "%#{@max_label}s: %10s i/s (±%s%%%s)\n",
+          result.label, format_ips(result.ips), error, gc
+      else
+        @out.printf "%10s i/s (±%s%%%s)\n",
+          format_ips(result.ips), error, gc
+      end
     end
 
     def summary(results)
