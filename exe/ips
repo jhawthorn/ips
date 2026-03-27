@@ -65,7 +65,7 @@ script_source << "require 'ips'\n"
 
 if inline_code.any?
   run_opts = []
-  run_opts << "summary: false" if versions.size > 1
+  run_opts << "summary: false" if versions.size > 1 || runs > 1
   run_opts << "time: #{bench_time}" if bench_time
   run_opts << "warmup: #{warmup_time}" if warmup_time
   run_opts << "debug: true" if debug
@@ -128,10 +128,10 @@ end
 $LOAD_PATH.unshift(LIB_DIR)
 require "ips"
 
-results = []
+results_by_ruby = rubies.map { [] }
 
 runs.times do
-  rubies.each do |version_str, ruby, extra_flags|
+  rubies.each_with_index do |(version_str, ruby, extra_flags), ruby_index|
     if ruby
       env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
     else
@@ -147,21 +147,26 @@ runs.times do
     data = rd.read
     rd.close
     Process.wait(pid)
-    raise "Child process failed" unless $?.success?
+    unless $?.success?
+      cmd_str = cmd.map { |a| shell_quote(a) }.join(" ")
+      abort "Command failed (exit #{$?.exitstatus}): #{cmd_str}"
+    end
     unless data.empty?
       child_results = Marshal.load(data)
       child_results.each do |result|
         result.ruby_executable = ruby
         result.run_label = "ruby #{version_str}" if version_str
-        results << result
+        results_by_ruby[ruby_index] << result
       end
     end
     puts
   end
 end
 
+results = results_by_ruby.flatten
+
 if runs > 1 && results.any?
-  IPS::Result.compare_aggregate(results, out: $stdout)
+  IPS::Result.compare_aggregate(results_by_ruby, out: $stdout)
 else
   IPS::Result.compare(results)
 end

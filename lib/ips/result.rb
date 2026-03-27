@@ -77,11 +77,28 @@ module IPS
       data["runs"].map { |h| from_h(h) }
     end
 
-    def self.compare_aggregate(results, out: $stdout)
-      grouped = group_entries(results)
-      pairs = grouped.map do |label, entries|
-        [label, Entry::Aggregate.new(entries)]
+    def self.compare_aggregate(results_by_group, out: $stdout)
+      run_count = results_by_group.sum(&:size)
+      multiple_groups = results_by_group.size > 1
+
+      pairs = results_by_group.flat_map do |results|
+        next [] if results.empty?
+        run_label = results.first.run_label
+        group_entries(results).map do |entry_label, entries|
+          label = multiple_groups && run_label ? "#{entry_label} (#{run_label})" : entry_label
+          [label, Entry::Aggregate.new(entries)]
+        end
       end
+
+      max_label = pairs.map { |l, _| l.size }.max
+      max_label = 20 if max_label < 20
+      out.puts "\nAggregate (#{run_count} runs)"
+      pairs.each do |label, agg|
+        error = agg.error_pct > 100 ? ">100" : "%4.1f" % agg.error_pct
+        out.printf "%#{max_label}s: %10s i/s (±%s%%)\n",
+          label, Display.format_ips(agg.ips), error
+      end
+
       Display.compare(pairs, out: out)
     end
 
@@ -235,6 +252,10 @@ module IPS
           mean = ips
           variance = @entries.map(&:ips).sum { |v| (v - mean) ** 2 } / @entries.size
           Math.sqrt(variance)
+        end
+
+        def error_pct
+          (stddev / ips) * 100.0
         end
       end
     end

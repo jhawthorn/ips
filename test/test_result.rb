@@ -368,7 +368,7 @@ class TestResult < Minitest::Test
     r2 = IPS::Result.new(e2, uuid: "u2", ruby_version: "3.4.0", ruby_description: "ruby 3.4.0", ruby_executable: nil, pid: 2, yjit_enabled: false)
 
     out = StringIO.new
-    IPS::Result.compare_aggregate([r1, r2], out: out)
+    IPS::Result.compare_aggregate([[r1, r2]], out: out)
 
     assert_match(/Summary/, out.string)
     assert_match(/fast/, out.string)
