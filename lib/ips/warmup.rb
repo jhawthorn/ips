@@ -3,28 +3,35 @@
 module IPS
   class Warmup
     MAX_ITERATIONS = 1 << 30
-    NANOSECONDS_PER_100MS = 100_000_000
+    TARGET_BATCH_NS = 100_000_000
+    MAX_WARMUP_CYCLES = 1000
+    TARGET_WARMUP_CALLS = 1000
 
     def run(budget_ns)
-      elapsed_total = 0
-      half = budget_ns / 2
+      elapsed = 0
 
+      # 1. Rough calibrate
+      last_ns = yield 1
+      elapsed += last_ns
+
+      # 2. JIT warmup
+      calls_remaining = TARGET_WARMUP_CALLS
       cycles = 1
-      last_ns = 0
-      loop do
+      while elapsed < budget_ns && calls_remaining > 0
+        remaining_ns = budget_ns - elapsed
+        cycles = cycles_for(last_ns, cycles, remaining_ns / calls_remaining)
+        cycles = MAX_WARMUP_CYCLES if cycles > MAX_WARMUP_CYCLES
         last_ns = yield cycles
-        elapsed_total += last_ns
-        break if cycles >= MAX_ITERATIONS
-        break if elapsed_total + last_ns * 2 >= half
-        cycles *= 2
+        elapsed += last_ns
+        calls_remaining -= 1
       end
 
-      cycles = cycles_per_100ms(last_ns, cycles)
+      # 3. Calibrate to 100ms batches and run out the budget
+      cycles = cycles_for(last_ns, cycles, TARGET_BATCH_NS)
       cycles = MAX_ITERATIONS if cycles > MAX_ITERATIONS
-
-      while elapsed_total + NANOSECONDS_PER_100MS < budget_ns
-        elapsed_ns = yield cycles
-        elapsed_total += elapsed_ns
+      while elapsed < budget_ns
+        last_ns = yield cycles
+        elapsed += last_ns
       end
 
       cycles
@@ -32,9 +39,9 @@ module IPS
 
     private
 
-    def cycles_per_100ms(time_ns, iters)
-      cycles = ((NANOSECONDS_PER_100MS.to_f / time_ns) * iters).to_i
-      cycles <= 0 ? 1 : cycles
+    def cycles_for(time_ns, iters, target_ns)
+      c = (target_ns * iters) / time_ns
+      c < 1 ? 1 : c
     end
   end
 end

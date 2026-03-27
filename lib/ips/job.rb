@@ -56,12 +56,19 @@ module IPS
 
       budget_ns = (@warmup * Timing::NANOSECONDS_PER_SECOND).to_i
       warmup = Warmup.new
+      last_progress = 0
       cycles = warmup.run(budget_ns) do |iters|
         t0 = Timing.now
         item.call_times(iters)
-        elapsed_ns = Timing.now - t0
-        estimate = Timing::NANOSECONDS_PER_SECOND * (iters.to_f / elapsed_ns)
-        display.progress(estimate: estimate)
+        t1 = Timing.now
+        elapsed_ns = t1 - t0
+        if t1 - last_progress > Timing::NANOSECONDS_PER_100MS
+          estimate = Timing::NANOSECONDS_PER_SECOND * (iters.to_f / elapsed_ns)
+          display.progress(estimate: estimate)
+          last_progress = t1
+        end
+        @out.printf "  warmup: %d cycles in %dns (%s i/s)\n",
+          iters, elapsed_ns, Display.format_ips(Timing::NANOSECONDS_PER_SECOND * (iters.to_f / elapsed_ns)) if @debug
         elapsed_ns
       end
 
