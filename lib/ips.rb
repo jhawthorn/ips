@@ -6,13 +6,17 @@ require "ips/display"
 require "ips/job"
 
 module IPS
-  @results = []
+  @overrides = {}
 
-  def self.run(time: 5, warmup: time * 0.2, summary: true, debug: false, frozen_string_literal: true, out: $stdout)
-    job = Job.new(time: time, warmup: warmup, summary: summary, debug: debug, frozen_string_literal: frozen_string_literal, out: out)
+  def self.run(time: 5, warmup: time * 0.2, summary: true, debug: false, frozen_string_literal: true, save: nil, out: $stdout)
+    opts = { time: time, warmup: warmup, summary: summary, debug: debug, frozen_string_literal: frozen_string_literal, out: out }
+    opts.merge!(@overrides)
+    save = opts.delete(:save)
+
+    job = Job.new(**opts)
     yield job
     result = job.run
-    @results << result
+    Marshal.dump(result, save) if save
     result
   end
 
@@ -25,7 +29,7 @@ module IPS
   end
 
   class << self
-    attr_reader :results
+    attr_accessor :overrides
     alias_method :ips, :run
   end
 end

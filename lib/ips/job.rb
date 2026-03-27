@@ -3,11 +3,10 @@
 require "ips/job/entry"
 require "ips/result"
 require "ips/display"
+require "ips/warmup"
 
 module IPS
   class Job
-    MAX_ITERATIONS = 1 << 30
-
     attr_accessor :warmup, :time
 
     def initialize(time: 5, warmup: time * 0.2, summary: true, debug: false, frozen_string_literal: true, out: $stdout)
@@ -52,45 +51,22 @@ module IPS
 
     private
 
-    def cycles_per_100ms(time_ns, iters)
-      cycles = ((Timing::NANOSECONDS_PER_100MS.to_f / time_ns) * iters).to_i
-      cycles <= 0 ? 1 : cycles
-    end
-
     def warmup_item(item, display)
       Timing.clean_env
 
-      before = Timing.now
-      target = Timing.add_second(before, @warmup / 2.0)
-
-      cycles = 1
-      begin
+      budget_ns = (@warmup * Timing::NANOSECONDS_PER_SECOND).to_i
+      warmup = Warmup.new
+      cycles = warmup.run(budget_ns) do |iters|
         t0 = Timing.now
-        item.call_times(cycles)
-        t1 = Timing.now
-        warmup_iter = cycles
-        warmup_ns = t1 - t0
-
-        estimate = Timing::NANOSECONDS_PER_SECOND * (warmup_iter.to_f / warmup_ns)
+        item.call_times(iters)
+        elapsed_ns = Timing.now - t0
+        estimate = Timing::NANOSECONDS_PER_SECOND * (iters.to_f / elapsed_ns)
         display.progress(estimate: estimate)
+        elapsed_ns
+      end
 
-        break if cycles >= MAX_ITERATIONS
-        cycles *= 2
-      end while Timing.now + warmup_ns * 2 < target
-
-      per_100ms = cycles_per_100ms(warmup_ns, warmup_iter)
-      cycles = per_100ms > MAX_ITERATIONS ? MAX_ITERATIONS : per_100ms
       @timing[item] = cycles
       @out.puts "  cycles: #{cycles}" if @debug
-
-      target = Timing.add_second(before, @warmup)
-      while Timing.now + Timing::NANOSECONDS_PER_100MS < target
-        t0 = Timing.now
-        item.call_times(cycles)
-        t1 = Timing.now
-        estimate = Timing::NANOSECONDS_PER_SECOND * (cycles.to_f / (t1 - t0))
-        display.progress(estimate: estimate)
-      end
     end
 
     def measure_item(item, display)

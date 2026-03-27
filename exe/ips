@@ -59,19 +59,21 @@ if script.nil? && inline_code.empty?
   exit 1
 end
 
+overrides = []
+overrides << "save: IO.open(3, 'w')"
+overrides << "summary: false" if versions.size > 1 || runs > 1
+overrides << "time: #{bench_time}" if bench_time
+overrides << "warmup: #{warmup_time}" if warmup_time
+overrides << "debug: true" if debug
+overrides << "frozen_string_literal: false" unless frozen_string_literal
+
 script_source = +""
 script_source << "# frozen_string_literal: true\n" if frozen_string_literal
 script_source << "require 'ips'\n"
+script_source << "IPS.overrides = { #{overrides.join(", ")} }\n"
 
 if inline_code.any?
-  run_opts = []
-  run_opts << "summary: false" if versions.size > 1 || runs > 1
-  run_opts << "time: #{bench_time}" if bench_time
-  run_opts << "warmup: #{warmup_time}" if warmup_time
-  run_opts << "debug: true" if debug
-  run_opts << "frozen_string_literal: false" unless frozen_string_literal
-  run_opts_str = run_opts.any? ? "(#{run_opts.join(", ")})" : ""
-  script_source << "IPS.run#{run_opts_str} do |x|\n"
+  script_source << "IPS.run do |x|\n"
   inline_code.each do |code|
     script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
   end
@@ -79,8 +81,6 @@ if inline_code.any?
 else
   script_source << "load(#{script.dump})\n"
 end
-
-script_source << "IO.open(3, 'w') { |f| Marshal.dump(IPS.results, f) }\n"
 ruby_args = ["-e", script_source]
 
 # Shell-escape for display purposes only, not for security.
@@ -129,8 +129,9 @@ $LOAD_PATH.unshift(LIB_DIR)
 require "ips"
 
 results_by_ruby = rubies.map { [] }
+quiet = runs > 1
 
-runs.times do
+runs.times do |run_index|
   rubies.each_with_index do |(version_str, ruby, extra_flags), ruby_index|
     if ruby
       env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
@@ -139,29 +140,42 @@ runs.times do
       env = {}
     end
 
-    cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
+    cmd = [ruby, *extra_flags, *ruby_flags]
+    cmd << "-v" unless quiet
+    cmd.push("-I", LIB_DIR, *ruby_args)
     $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+
     rd, wr = IO.pipe
-    pid = spawn(env, *cmd, 3 => wr)
+    spawn_opts = { 3 => wr }
+    spawn_opts[:out] = File::NULL if quiet
+
+    pid = spawn(env, *cmd, **spawn_opts)
     wr.close
-    data = rd.read
+
+    if quiet
+      $stderr.print "\rRun #{run_index + 1}/#{runs}"
+      $stderr.print " (#{version_str})" if version_str
+      $stderr.print "..."
+      $stderr.flush
+    end
+
+    until rd.eof?
+      result = Marshal.load(rd)
+      result.ruby_executable = ruby
+      result.run_label = "ruby #{version_str}" if version_str
+      results_by_ruby[ruby_index] << result
+    end
     rd.close
-    Process.wait(pid)
-    unless $?.success?
+    _, status = Process.wait2(pid)
+    unless status.success?
+      $stderr.puts if quiet
       cmd_str = cmd.map { |a| shell_quote(a) }.join(" ")
-      abort "Command failed (exit #{$?.exitstatus}): #{cmd_str}"
+      abort "Command failed (exit #{status.exitstatus}): #{cmd_str}"
     end
-    unless data.empty?
-      child_results = Marshal.load(data)
-      child_results.each do |result|
-        result.ruby_executable = ruby
-        result.run_label = "ruby #{version_str}" if version_str
-        results_by_ruby[ruby_index] << result
-      end
-    end
-    puts
+    puts unless quiet
   end
 end
+$stderr.puts if quiet
 
 results = results_by_ruby.flatten
 
