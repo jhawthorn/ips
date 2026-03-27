@@ -4,6 +4,7 @@
 versions = []
 inline_code = []
 ruby_flags = []
+runs = 1
 save_path = nil
 bench_time = nil
 warmup_time = nil
@@ -23,6 +24,9 @@ while args.first
     ruby_flags.push("-r", args.shift)
   when "--disable-gems", /\A--yjit/, /\A--zjit/
     ruby_flags << args.shift
+  when "--runs"
+    args.shift
+    runs = args.shift.to_i
   when "--save"
     args.shift
     save_path = args.shift
@@ -55,6 +59,10 @@ if script.nil? && inline_code.empty?
   exit 1
 end
 
+script_source = +""
+script_source << "# frozen_string_literal: true\n" if frozen_string_literal
+script_source << "require 'ips'\n"
+
 if inline_code.any?
   run_opts = []
   run_opts << "summary: false" if versions.size > 1
@@ -63,18 +71,17 @@ if inline_code.any?
   run_opts << "debug: true" if debug
   run_opts << "frozen_string_literal: false" unless frozen_string_literal
   run_opts_str = run_opts.any? ? "(#{run_opts.join(", ")})" : ""
-  script_source = +""
-  script_source << "# frozen_string_literal: true\n" if frozen_string_literal
-  script_source << "require 'ips'\nresult = IPS.run#{run_opts_str} do |x|\n"
+  script_source << "IPS.run#{run_opts_str} do |x|\n"
   inline_code.each do |code|
     script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
   end
   script_source << "end\n"
-  script_source << "IO.open(3, 'w') { |f| Marshal.dump(result, f) }\n"
-  ruby_args = ["-e", script_source]
 else
-  ruby_args = [script]
+  script_source << "load(#{script.dump})\n"
 end
+
+script_source << "IO.open(3, 'w') { |f| Marshal.dump(IPS.results, f) }\n"
+ruby_args = ["-e", script_source]
 
 # Shell-escape for display purposes only, not for security.
 def shell_quote(arg)
@@ -123,33 +130,41 @@ require "ips"
 
 results = []
 
-rubies.each do |version_str, ruby, extra_flags|
-  if ruby
-    env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
-  else
-    ruby = "ruby"
-    env = {}
-  end
+runs.times do
+  rubies.each do |version_str, ruby, extra_flags|
+    if ruby
+      env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
+    else
+      ruby = "ruby"
+      env = {}
+    end
 
-  cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
-  $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
-  rd, wr = IO.pipe
-  pid = spawn(env, *cmd, 3 => wr)
-  wr.close
-  data = rd.read
-  rd.close
-  Process.wait(pid)
-  raise "Child process failed" unless $?.success?
-  unless data.empty?
-    result = Marshal.load(data)
-    result.ruby_executable = ruby
-    result.run_label = "ruby #{version_str}" if version_str
-    results << result
+    cmd = [ruby, *extra_flags, *ruby_flags, "-v", "-I", LIB_DIR, *ruby_args]
+    $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+    rd, wr = IO.pipe
+    pid = spawn(env, *cmd, 3 => wr)
+    wr.close
+    data = rd.read
+    rd.close
+    Process.wait(pid)
+    raise "Child process failed" unless $?.success?
+    unless data.empty?
+      child_results = Marshal.load(data)
+      child_results.each do |result|
+        result.ruby_executable = ruby
+        result.run_label = "ruby #{version_str}" if version_str
+        results << result
+      end
+    end
+    puts
   end
-  puts
 end
 
-IPS::Result.compare(results)
+if runs > 1 && results.any?
+  IPS::Result.compare_aggregate(results, out: $stdout)
+else
+  IPS::Result.compare(results)
+end
 
 if save_path && results.any?
   IPS::Result.save!(save_path, results)

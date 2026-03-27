@@ -77,6 +77,22 @@ module IPS
       data["runs"].map { |h| from_h(h) }
     end
 
+    def self.compare_aggregate(results, out: $stdout)
+      grouped = group_entries(results)
+      pairs = grouped.map do |label, entries|
+        [label, Entry::Aggregate.new(entries)]
+      end
+      Display.compare(pairs, out: out)
+    end
+
+    def self.group_entries(results)
+      num_entries = results.first.entries.size
+      num_entries.times.map do |i|
+        entries = results.map { |r| r.entries[i] }
+        [entries.first.label, entries]
+      end
+    end
+
     def self.compare(results, out: $stdout)
       return if results.size < 2
 
@@ -201,6 +217,25 @@ module IPS
 
       def self.from_h(hash)
         new(hash["label"], hash["cycles"], hash["times"], hash["gc_times"])
+      end
+
+      class Aggregate
+        attr_reader :entries
+
+        def initialize(entries)
+          @entries = entries
+        end
+
+        def ips
+          ips_values = @entries.map(&:ips)
+          ips_values.sum / ips_values.size
+        end
+
+        def stddev
+          mean = ips
+          variance = @entries.map(&:ips).sum { |v| (v - mean) ** 2 } / @entries.size
+          Math.sqrt(variance)
+        end
       end
     end
   end

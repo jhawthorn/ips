@@ -305,4 +305,73 @@ class TestResult < Minitest::Test
     assert_equal "before", labels["u1"]
     assert_equal "after", labels["u2"]
   end
+
+  def test_group_entries_by_index
+    e1 = [
+      IPS::Result::Entry.new("a", 100, make_times(2, NS / 10), make_gc_times(2)),
+      IPS::Result::Entry.new("b", 100, make_times(2, NS / 5), make_gc_times(2)),
+    ]
+    e2 = [
+      IPS::Result::Entry.new("a", 100, make_times(2, NS / 10), make_gc_times(2)),
+      IPS::Result::Entry.new("b", 100, make_times(2, NS / 5), make_gc_times(2)),
+    ]
+    r1 = IPS::Result.new(e1, uuid: "u1", ruby_version: "3.4.0", ruby_description: "ruby 3.4.0", ruby_executable: nil, pid: 1, yjit_enabled: false)
+    r2 = IPS::Result.new(e2, uuid: "u2", ruby_version: "3.4.0", ruby_description: "ruby 3.4.0", ruby_executable: nil, pid: 2, yjit_enabled: false)
+
+    grouped = IPS::Result.group_entries([r1, r2])
+
+    assert_equal 2, grouped.size
+    assert_equal "a", grouped[0][0]
+    assert_equal "b", grouped[1][0]
+    assert_equal [e1[0], e2[0]], grouped[0][1]
+    assert_equal [e1[1], e2[1]], grouped[1][1]
+  end
+
+  def test_aggregate_ips
+    # Two entries with known IPS: 10k and 20k
+    e1 = IPS::Result::Entry.new("a", 1000, make_times(10, NS / 10), make_gc_times(10))  # 10k i/s
+    e2 = IPS::Result::Entry.new("a", 2000, make_times(10, NS / 10), make_gc_times(10))  # 20k i/s
+
+    agg = IPS::Result::Entry::Aggregate.new([e1, e2])
+
+    assert_in_delta 15_000.0, agg.ips, 0.01
+  end
+
+  def test_aggregate_stddev
+    e1 = IPS::Result::Entry.new("a", 1000, make_times(10, NS / 10), make_gc_times(10))  # 10k i/s
+    e2 = IPS::Result::Entry.new("a", 2000, make_times(10, NS / 10), make_gc_times(10))  # 20k i/s
+
+    agg = IPS::Result::Entry::Aggregate.new([e1, e2])
+
+    assert_in_delta 5_000.0, agg.stddev, 0.01
+  end
+
+  def test_aggregate_stddev_zero_when_identical
+    e1 = IPS::Result::Entry.new("a", 1000, make_times(10, NS / 10), make_gc_times(10))
+    e2 = IPS::Result::Entry.new("a", 1000, make_times(10, NS / 10), make_gc_times(10))
+
+    agg = IPS::Result::Entry::Aggregate.new([e1, e2])
+
+    assert_in_delta 0.0, agg.stddev, 0.01
+  end
+
+  def test_compare_aggregate
+    e1 = [
+      IPS::Result::Entry.new("fast", 2000, make_times(10, NS / 10), make_gc_times(10)),
+      IPS::Result::Entry.new("slow", 1000, make_times(10, NS / 10), make_gc_times(10)),
+    ]
+    e2 = [
+      IPS::Result::Entry.new("fast", 2000, make_times(10, NS / 10), make_gc_times(10)),
+      IPS::Result::Entry.new("slow", 1000, make_times(10, NS / 10), make_gc_times(10)),
+    ]
+    r1 = IPS::Result.new(e1, uuid: "u1", ruby_version: "3.4.0", ruby_description: "ruby 3.4.0", ruby_executable: nil, pid: 1, yjit_enabled: false)
+    r2 = IPS::Result.new(e2, uuid: "u2", ruby_version: "3.4.0", ruby_description: "ruby 3.4.0", ruby_executable: nil, pid: 2, yjit_enabled: false)
+
+    out = StringIO.new
+    IPS::Result.compare_aggregate([r1, r2], out: out)
+
+    assert_match(/Summary/, out.string)
+    assert_match(/fast/, out.string)
+    assert_match(/times faster than slow/, out.string)
+  end
 end
