@@ -97,7 +97,7 @@ def find_ruby(version)
     next unless Dir.exist?(dir)
     Dir.children(dir).sort.each do |name|
       bare = name.delete_prefix("ruby-")
-      if bare.start_with?(version)
+      if bare.start_with?(version) || name.start_with?(version)
         ruby = File.join(dir, name, "bin", "ruby")
         return ruby if File.executable?(ruby)
       end
