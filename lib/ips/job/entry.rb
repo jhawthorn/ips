@@ -32,8 +32,9 @@ module IPS
           end
         RUBY
         eval_source = "# frozen_string_literal: #{@frozen_string_literal}\n#{@source}"
-        m = (class << self; self; end)
-        m.class_eval(eval_source)
+        m = Module.new
+        m.module_eval(eval_source)
+        extend(m)
       end
 
       def define_call_times_block(act)
