@@ -93,17 +93,21 @@ RUBY_DIRS = [File.expand_path("~/.rubies"), "/opt/rubies"]
 LIB_DIR = File.expand_path("../lib", __dir__)
 
 def find_ruby(version)
+  match = nil
   RUBY_DIRS.each do |dir|
     next unless Dir.exist?(dir)
     Dir.children(dir).sort.each do |name|
       bare = name.delete_prefix("ruby-")
-      if bare.start_with?(version) || name.start_with?(version)
+      if bare == version || name == version
         ruby = File.join(dir, name, "bin", "ruby")
         return ruby if File.executable?(ruby)
+      elsif bare.include?(version) || name.include?(version)
+        ruby = File.join(dir, name, "bin", "ruby")
+        match = ruby if File.executable?(ruby)
       end
     end
   end
-  nil
+  match
 end
 
 def resolve_ruby(str)
