@@ -9,8 +9,10 @@ class TestCLI < Minitest::Test
   LIB = File.expand_path("../lib", __dir__)
 
   def run_cli(*args)
-    out, status = Open3.capture2("ruby", "-I", LIB, EXE, *args)
-    [out, status]
+    Bundler.with_unbundled_env do
+      out, status = Open3.capture2("ruby", "-I", LIB, EXE, *args)
+      [out, status]
+    end
   end
 
   def test_inline_single_run
