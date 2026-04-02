@@ -147,7 +147,7 @@ runs.times do |run_index|
     cmd = [ruby, *extra_flags, *ruby_flags]
     cmd << "-v" unless quiet
     cmd.push("-I", LIB_DIR, *ruby_args)
-    $stderr.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+    $stdout.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
 
     rd, wr = IO.pipe
     spawn_opts = { 3 => wr }
@@ -157,10 +157,10 @@ runs.times do |run_index|
     wr.close
 
     if quiet
-      $stderr.print "\rRun #{run_index + 1}/#{runs}"
-      $stderr.print " (#{version_str})" if version_str
-      $stderr.print "..."
-      $stderr.flush
+      $stdout.print "\rRun #{run_index + 1}/#{runs}"
+      $stdout.print " (#{version_str})" if version_str
+      $stdout.print "..."
+      $stdout.flush
     end
 
     until rd.eof?
