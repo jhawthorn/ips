@@ -3,6 +3,7 @@
 
 versions = []
 inline_code = []
+prelude = []
 ruby_flags = []
 runs = 1
 save_path = nil
@@ -22,6 +23,12 @@ while args.first
   when "-r"
     args.shift
     ruby_flags.push("-r", args.shift)
+  when "-I"
+    args.shift
+    ruby_flags.push("-I", args.shift)
+  when "--prelude"
+    args.shift
+    prelude << args.shift
   when "--disable-gems", /\A--yjit/, /\A--zjit/
     ruby_flags << args.shift
   when "--runs"
@@ -55,7 +62,7 @@ end
 script = args.shift
 
 if script.nil? && inline_code.empty?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] [-e CODE ...] [<script>]"
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script>]"
   exit 1
 end
 
@@ -71,6 +78,7 @@ script_source = +""
 script_source << "# frozen_string_literal: true\n" if frozen_string_literal
 script_source << "require 'ips'\n"
 script_source << "IPS.overrides = { #{overrides.join(", ")} }\n"
+prelude.each { |code| script_source << code << "\n" }
 
 if inline_code.any?
   script_source << "IPS.run do |x|\n"

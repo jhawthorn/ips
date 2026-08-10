@@ -43,6 +43,8 @@ Options:
 
 - `--ruby VERSION` — run against a specific Ruby (repeatable)
 - `-e CODE` — inline benchmark expression (repeatable)
+- `--prelude CODE` — run setup code before the benchmark (repeatable)
+- `-I DIR` — add a directory to the load path (repeatable)
 - `-t SECONDS` — benchmark time (default: 5)
 - `-w SECONDS` — warmup time (default: 20% of benchmark time)
 - `--save PATH` — save results to JSON (appends to existing file)

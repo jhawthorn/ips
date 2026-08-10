@@ -42,6 +42,24 @@ class TestCLI < Minitest::Test
     end
   end
 
+  def test_prelude
+    out, status = run_cli("--prelude", "ARY = [1, 2, 3]", "-e", "ARY.include?(2)", "-t", "0.3", "-w", "0.1")
+    assert status.success?
+    assert_match(/ARY\.include\?\(2\)/, out)
+    assert_match(/i\/s/, out)
+  end
+
+  def test_require_and_load_path
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "mylib.rb"), "MYLIB = [1, 2, 3]\n")
+
+      out, status = run_cli("-I", dir, "-r", "mylib", "-e", "MYLIB.include?(2)", "-t", "0.3", "-w", "0.1")
+      assert status.success?
+      assert_match(/MYLIB\.include\?\(2\)/, out)
+      assert_match(/i\/s/, out)
+    end
+  end
+
   def test_runs_aggregates
     out, status = run_cli("--runs", "2", "-e", "Object.allocate", "-e", "Object.new", "-t", "0.5", "-w", "0.1")
     assert status.success?
