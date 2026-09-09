@@ -40,6 +40,10 @@ module IPS
     private
 
     def cycles_for(time_ns, iters, target_ns)
+      # Below the clock's resolution, so there's nothing to extrapolate from.
+      # Grow the batch and let the caller measure again.
+      return iters * 2 if time_ns <= 0
+
       c = (target_ns * iters) / time_ns
       c < 1 ? 1 : c
     end
