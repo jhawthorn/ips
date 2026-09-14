@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 versions = []
+revs = []
 inline_code = []
 prelude = []
 ruby_flags = []
@@ -17,6 +18,9 @@ while args.first
   when "--ruby"
     args.shift
     versions << args.shift
+  when "--sha"
+    args.shift
+    revs << args.shift
   when "-e"
     args.shift
     inline_code << args.shift
@@ -62,34 +66,9 @@ end
 script = args.shift
 
 if script.nil? && inline_code.empty?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script>]"
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script>]"
   exit 1
 end
-
-overrides = []
-overrides << "save: IO.open(3, 'w')"
-overrides << "summary: false" if versions.size > 1 || runs > 1
-overrides << "time: #{bench_time}" if bench_time
-overrides << "warmup: #{warmup_time}" if warmup_time
-overrides << "debug: true" if debug
-overrides << "frozen_string_literal: false" unless frozen_string_literal
-
-script_source = +""
-script_source << "# frozen_string_literal: true\n" if frozen_string_literal
-script_source << "require 'ips'\n"
-script_source << "IPS.overrides = { #{overrides.join(", ")} }\n"
-prelude.each { |code| script_source << code << "\n" }
-
-if inline_code.any?
-  script_source << "IPS.run do |x|\n"
-  inline_code.each do |code|
-    script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
-  end
-  script_source << "end\n"
-else
-  script_source << "load(#{script.dump})\n"
-end
-ruby_args = ["-e", script_source]
 
 # Shell-escape for display purposes only, not for security.
 def shell_quote(arg)
@@ -128,6 +107,20 @@ def resolve_ruby(str)
   [ruby, extra_flags]
 end
 
+# Runs git in the current directory, capturing stdout and stderr together.
+def git(*git_args)
+  out = IO.popen(["git", *git_args], err: [:child, :out], &:read)
+  [out, $?]
+end
+
+def git!(*git_args)
+  out, status = git(*git_args)
+  unless status.success?
+    abort "git #{git_args.join(" ")} failed:\n#{out}"
+  end
+  out
+end
+
 if versions.empty?
   rubies = [[nil, nil, []]]
 else
@@ -137,62 +130,173 @@ else
   }
 end
 
+# Each checkout is [label, sha]. Without --sha we stay where we are and label
+# nothing. With --sha the current checkout is always the first variant, so
+# there's a baseline to compare against.
+original_ref = nil
+original_sha = nil
+
+if revs.empty?
+  checkouts = [[nil, nil]]
+else
+  dirty = git!("status", "--porcelain", "-uno")
+  unless dirty.empty?
+    abort "Working tree has uncommitted changes to tracked files; commit or stash them before using --sha:\n#{dirty}"
+  end
+
+  original_sha = git!("rev-parse", "HEAD").strip
+  branch, branch_status = git("symbolic-ref", "--short", "HEAD")
+  original_ref = branch_status.success? ? branch.strip : nil
+
+  full_shas = [original_sha]
+  revs.each do |rev|
+    if rev.include?("..")
+      full_shas.concat(git!("rev-list", "--reverse", rev).split("\n"))
+    else
+      full_shas << git!("rev-parse", "--verify", "#{rev}^{commit}").strip
+    end
+  end
+  full_shas.uniq!
+
+  checkouts = full_shas.map { |sha| [git!("rev-parse", "--short", sha).strip, sha] }
+  # Prefer the branch name for the baseline when we have one.
+  checkouts[0][0] = original_ref if original_ref
+end
+
+# Variants are the product of checkouts and rubies.
+variants = checkouts.flat_map { |sha_label, sha|
+  rubies.map { |version_str, ruby, extra_flags|
+    label =
+      if version_str && sha_label
+        "ruby #{version_str} @ #{sha_label}"
+      elsif version_str
+        "ruby #{version_str}"
+      else
+        sha_label
+      end
+    [label, ruby, extra_flags, sha]
+  }
+}
+
+overrides = []
+overrides << "save: IO.open(3, 'w')"
+overrides << "summary: false" if variants.size > 1 || runs > 1
+overrides << "time: #{bench_time}" if bench_time
+overrides << "warmup: #{warmup_time}" if warmup_time
+overrides << "debug: true" if debug
+overrides << "frozen_string_literal: false" unless frozen_string_literal
+
+script_source = +""
+script_source << "# frozen_string_literal: true\n" if frozen_string_literal
+script_source << "require 'ips'\n"
+script_source << "IPS.overrides = { #{overrides.join(", ")} }\n"
+prelude.each { |code| script_source << code << "\n" }
+
+if inline_code.any?
+  script_source << "IPS.run do |x|\n"
+  inline_code.each do |code|
+    script_source << "  x.report(#{code.inspect}, #{code.inspect})\n"
+  end
+  script_source << "end\n"
+else
+  script_source << "load(#{script.dump})\n"
+end
+ruby_args = ["-e", script_source]
+
 $LOAD_PATH.unshift(LIB_DIR)
 require "ips"
 
-results_by_ruby = rubies.map { [] }
+# Check out commits in place, never changing directory and never creating a
+# worktree, so the ruby, the bundle, and any per-directory setup stay identical
+# across every variant.
+current_sha = original_sha
+moved = false
+
+checkout = lambda do |sha|
+  next if sha.nil? || sha == current_sha
+  $stdout.puts "git checkout --detach #{sha}" if verbose
+  out, status = git("checkout", "--detach", sha)
+  abort "git checkout --detach #{sha} failed:\n#{out}" unless status.success?
+  moved = true
+  current_sha = sha
+end
+
+restore = lambda do
+  next unless moved
+  moved = false
+  git_args = original_ref ? ["checkout", original_ref] : ["checkout", "--detach", original_sha]
+  out, status = git(*git_args)
+  if status.success?
+    current_sha = original_sha
+  else
+    $stderr.puts "WARNING: failed to restore #{original_ref || original_sha}:\n#{out}"
+  end
+end
+
+trap("INT") do
+  restore.call
+  exit 130
+end if original_sha
+
+results_by_variant = variants.map { [] }
 quiet = runs > 1
 
-runs.times do |run_index|
-  rubies.each_with_index do |(version_str, ruby, extra_flags), ruby_index|
-    if ruby
-      env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
-    else
-      ruby = "ruby"
-      env = {}
+begin
+  runs.times do |run_index|
+    variants.each_with_index do |(label, ruby, extra_flags, sha), variant_index|
+      checkout.call(sha)
+
+      if ruby
+        env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
+      else
+        ruby = "ruby"
+        env = {}
+      end
+
+      cmd = [ruby, *extra_flags, *ruby_flags]
+      cmd << "-v" unless quiet
+      cmd.push("-I", LIB_DIR, *ruby_args)
+      $stdout.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+
+      rd, wr = IO.pipe
+      spawn_opts = { 3 => wr }
+      spawn_opts[:out] = File::NULL if quiet
+
+      pid = spawn(env, *cmd, **spawn_opts)
+      wr.close
+
+      if quiet
+        $stdout.print "\rRun #{run_index + 1}/#{runs}"
+        $stdout.print " (#{label})" if label
+        $stdout.print "..."
+        $stdout.flush
+      end
+
+      until rd.eof?
+        result = Marshal.load(rd)
+        result.ruby_executable = ruby
+        result.run_label = label if label
+        results_by_variant[variant_index] << result
+      end
+      rd.close
+      _, status = Process.wait2(pid)
+      unless status.success?
+        $stderr.puts if quiet
+        cmd_str = cmd.map { |a| shell_quote(a) }.join(" ")
+        abort "Command failed (exit #{status.exitstatus}): #{cmd_str}"
+      end
+      puts unless quiet
     end
-
-    cmd = [ruby, *extra_flags, *ruby_flags]
-    cmd << "-v" unless quiet
-    cmd.push("-I", LIB_DIR, *ruby_args)
-    $stdout.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
-
-    rd, wr = IO.pipe
-    spawn_opts = { 3 => wr }
-    spawn_opts[:out] = File::NULL if quiet
-
-    pid = spawn(env, *cmd, **spawn_opts)
-    wr.close
-
-    if quiet
-      $stdout.print "\rRun #{run_index + 1}/#{runs}"
-      $stdout.print " (#{version_str})" if version_str
-      $stdout.print "..."
-      $stdout.flush
-    end
-
-    until rd.eof?
-      result = Marshal.load(rd)
-      result.ruby_executable = ruby
-      result.run_label = "ruby #{version_str}" if version_str
-      results_by_ruby[ruby_index] << result
-    end
-    rd.close
-    _, status = Process.wait2(pid)
-    unless status.success?
-      $stderr.puts if quiet
-      cmd_str = cmd.map { |a| shell_quote(a) }.join(" ")
-      abort "Command failed (exit #{status.exitstatus}): #{cmd_str}"
-    end
-    puts unless quiet
   end
+ensure
+  restore.call
 end
 $stderr.puts if quiet
 
-results = results_by_ruby.flatten
+results = results_by_variant.flatten
 
 if runs > 1 && results.any?
-  IPS::Result.compare_aggregate(results_by_ruby, out: $stdout)
+  IPS::Result.compare_aggregate(results_by_variant, out: $stdout)
 else
   IPS::Result.compare(results)
 end
