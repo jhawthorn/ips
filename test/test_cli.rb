@@ -43,6 +43,66 @@ class TestCLI < Minitest::Test
     end
   end
 
+  def test_yaml_benchmark
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "bench.yml")
+      File.write(path, <<~YAML)
+        prelude: |
+          ary = [1, 2, 3]
+        benchmark:
+          include: ary.include?(2)
+          size: ary.size
+        loop_count: 1000
+      YAML
+
+      out, status = run_cli(path, "-t", "0.3", "-w", "0.1")
+      assert status.success?
+      assert_match(/include/, out)
+      assert_match(/size/, out)
+      assert_match(/i\/s/, out)
+    end
+  end
+
+  def test_yaml_list_with_entry_prelude_and_teardown
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "bench.yml")
+      marker = File.join(dir, "done")
+      File.write(path, <<~YAML)
+        prelude: base = 10
+        benchmark:
+          - name: first
+            prelude: x = base + 1
+            script: x + 1
+          - name: second
+            script: base + 2
+        teardown: File.write(#{marker.dump}, "ok")
+      YAML
+
+      out, status = run_cli(path, "-t", "0.3", "-w", "0.1")
+      assert status.success?, out
+      assert_match(/first/, out)
+      assert_match(/second/, out)
+      assert File.exist?(marker)
+    end
+  end
+
+  def test_plain_script_is_benchmarked_whole
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "app_fib.rb")
+      File.write(path, <<~RUBY)
+        FIB_LIMIT = 10
+        def fib(n) = n < 3 ? 1 : fib(n - 1) + fib(n - 2)
+        fib(FIB_LIMIT)
+      RUBY
+
+      out, status = run_cli(path, "-t", "0.3", "-w", "0.1")
+      assert status.success?, out
+      assert_match(/app_fib/, out)
+      assert_match(/i\/s/, out)
+      refute_match(/already initialized/, out)
+    end
+  end
+
   def test_prelude
     out, status = run_cli("--prelude", "ARY = [1, 2, 3]", "-e", "ARY.include?(2)", "-t", "0.3", "-w", "0.1")
     assert status.success?

@@ -50,6 +50,20 @@ the bundle, and any per-directory setup stay identical across every commit. The
 working tree must be clean, and the branch you started on is restored when the
 run finishes (or is interrupted).
 
+Besides Ruby scripts that use IPS, `ips` can run YAML benchmark definitions
+and plain scripts:
+
+```
+$ ips bench.yml
+$ ips script.rb
+```
+
+A `.yml` file has a `prelude`, a `benchmark` (a single expression, a
+`name: expression` mapping, or a list of `name`/`script`/`prelude` entries) and
+an optional `teardown`. Each benchmark is run as a report and can see the local
+variables defined by the prelude. A Ruby script that doesn't use IPS is
+benchmarked as a whole.
+
 Options:
 
 - `--ruby VERSION` — run against a specific Ruby (repeatable)

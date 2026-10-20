@@ -4,6 +4,7 @@ require "ips/version"
 require "ips/timing"
 require "ips/display"
 require "ips/job"
+require "ips/loader"
 
 module IPS
   @overrides = {}

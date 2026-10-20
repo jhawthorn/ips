@@ -66,7 +66,7 @@ end
 script = args.shift
 
 if script.nil? && inline_code.empty?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script>]"
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script.rb|benchmark.yml>]"
   exit 1
 end
 
@@ -199,7 +199,7 @@ if inline_code.any?
   end
   script_source << "end\n"
 else
-  script_source << "load(#{script.dump})\n"
+  script_source << "IPS.load_file(#{script.dump})\n"
 end
 ruby_args = ["-e", script_source]
 
