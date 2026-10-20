@@ -7,14 +7,15 @@ module IPS
   #   teardown). Each benchmark is run as a report, and sees the local
   #   variables defined by the prelude. loop_count is ignored, since ips
   #   chooses its own iteration counts.
-  # * a Ruby script that uses IPS itself: loaded as-is.
+  # * a Ruby script that uses IPS (or the benchmark-ips gem's API) itself:
+  #   loaded as-is.
   # * any other Ruby script: the whole script is benchmarked as one report.
   def self.load_file(path)
     case File.extname(path)
     when ".yml", ".yaml"
       load_yaml(path)
     else
-      if File.read(path).match?(/\bIPS\b|\bIps\b|require\s*\(?\s*["']ips/)
+      if File.read(path).match?(/\bIPS\b|\bIps\b|require\s*\(?\s*["'](benchmark\/)?ips/)
         load(File.expand_path(path))
       else
         load_script(path)

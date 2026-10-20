@@ -64,6 +64,9 @@ an optional `teardown`. Each benchmark is run as a report and can see the local
 variables defined by the prelude. A Ruby script that doesn't use IPS is
 benchmarked as a whole.
 
+Scripts written for the [benchmark-ips](https://github.com/evanphx/benchmark-ips)
+gem (`require "benchmark/ips"` and `Benchmark.ips`) can be run with the CLI.
+
 Options:
 
 - `--ruby VERSION` — run against a specific Ruby (repeatable)

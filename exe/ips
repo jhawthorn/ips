@@ -78,6 +78,7 @@ end
 
 RUBY_DIRS = [File.expand_path("~/.rubies"), "/opt/rubies"]
 LIB_DIR = File.expand_path("../lib", __dir__)
+SHIM_DIR = File.join(LIB_DIR, "ips", "shim")
 
 def find_ruby(version)
   match = nil
@@ -255,7 +256,7 @@ begin
 
       cmd = [ruby, *extra_flags, *ruby_flags]
       cmd << "-v" unless quiet
-      cmd.push("-I", LIB_DIR, *ruby_args)
+      cmd.push("-I", LIB_DIR, "-I", SHIM_DIR, *ruby_args)
       $stdout.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
 
       rd, wr = IO.pipe

@@ -103,6 +103,29 @@ class TestCLI < Minitest::Test
     end
   end
 
+  def test_benchmark_ips_script
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "bench.rb")
+      File.write(path, <<~RUBY)
+        require "benchmark/ips"
+        Benchmark.ips(time: 0.3, warmup: 0.1) do |x|
+          x.config(stats: :bootstrap)
+          x.report("add") { 1 + 1 }
+          x.report(:loop) { |times| i = 0; i += 1 while i < times }
+          x.compare!
+          x.hold!("ignored.json")
+        end
+      RUBY
+
+      out, status = Bundler.with_unbundled_env { Open3.capture2e("ruby", "-I", LIB, EXE, path) }
+      assert status.success?, out
+      assert_match(/hold! is not supported/, out)
+      assert_match(/add/, out)
+      assert_match(/loop/, out)
+      assert_match(/times faster than|same-ish/, out)
+    end
+  end
+
   def test_prelude
     out, status = run_cli("--prelude", "ARY = [1, 2, 3]", "-e", "ARY.include?(2)", "-t", "0.3", "-w", "0.1")
     assert status.success?
