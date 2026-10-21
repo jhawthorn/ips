@@ -103,6 +103,45 @@ class TestCLI < Minitest::Test
     end
   end
 
+  def test_loader_snippet_overrides_detection
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "mentions.rb")
+      File.write(path, "# mentions IPS only in a comment\n1 + 1\n")
+
+      out, status = run_cli(path, "-t", "0.3", "-w", "0.1")
+      assert status.success?, out
+      refute_match(/i\/s/, out)
+
+      out, status = run_cli("--loader", "snippet", path, "-t", "0.3", "-w", "0.1")
+      assert status.success?, out
+      assert_match(/mentions/, out)
+      assert_match(/i\/s/, out)
+    end
+  end
+
+  def test_loader_program_overrides_detection
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "bench.rb")
+      # Uses IPS without the detector being able to see it.
+      File.write(path, <<~RUBY)
+        require ["i", "ps"].join
+        Object.const_get(["I", "PS"].join).run(time: 0.3, warmup: 0.1) do |job|
+          job.report("hidden") { 1 + 1 }
+        end
+      RUBY
+
+      out, status = run_cli("--loader", "program", path)
+      assert status.success?, out
+      assert_match(/hidden/, out)
+    end
+  end
+
+  def test_loader_rejects_unknown_value
+    out, status = Open3.capture2e("ruby", "-I", LIB, EXE, "--loader", "bogus", "x.rb")
+    refute status.success?
+    assert_match(/unknown loader/, out)
+  end
+
   def test_benchmark_ips_script
     Dir.mktmpdir do |dir|
       path = File.join(dir, "bench.rb")

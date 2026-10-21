@@ -1,25 +1,46 @@
 # frozen_string_literal: true
 
 module IPS
-  # Loads a benchmark file in one of three forms:
+  LOADERS = %w[auto snippet program yaml].freeze
+
+  # Loads a benchmark file with one of these loaders:
   #
-  # * *.yml / *.yaml: benchmark_driver style definitions (prelude, benchmark,
+  # * yaml: benchmark_driver style definitions (prelude, benchmark,
   #   teardown). Each benchmark is run as a report, and sees the local
   #   variables defined by the prelude. loop_count is ignored, since ips
   #   chooses its own iteration counts.
-  # * a Ruby script that uses IPS (or the benchmark-ips gem's API) itself:
-  #   loaded as-is.
-  # * any other Ruby script: the whole script is benchmarked as one report.
-  def self.load_file(path)
-    case File.extname(path)
-    when ".yml", ".yaml"
-      load_yaml(path)
+  # * program: a Ruby script that uses IPS (or the benchmark-ips gem's API)
+  #   itself, loaded as-is.
+  # * snippet: any other Ruby script, benchmarked as a whole as one report.
+  # * auto (the default): yaml for *.yml / *.yaml, otherwise program if the
+  #   file looks like it uses IPS, and snippet if not.
+  def self.load_file(path, loader: "auto")
+    loader = check_loader(loader)
+    loader = detect_loader(path) if loader == "auto"
+
+    case loader
+    when "yaml" then load_yaml(path)
+    when "program" then load(File.expand_path(path))
+    when "snippet" then load_script(path)
+    end
+  end
+
+  # Returns the loader name as a string, raising ArgumentError if it's unknown.
+  def self.check_loader(loader)
+    loader = loader.to_s
+    unless LOADERS.include?(loader)
+      raise ArgumentError, "unknown loader #{loader.inspect} (expected #{LOADERS.join(", ")})"
+    end
+    loader
+  end
+
+  def self.detect_loader(path)
+    return "yaml" if %w[.yml .yaml].include?(File.extname(path))
+
+    if File.read(path).match?(/\bIPS\b|\bIps\b|require\s*\(?\s*["'](benchmark\/)?ips/)
+      "program"
     else
-      if File.read(path).match?(/\bIPS\b|\bIps\b|require\s*\(?\s*["'](benchmark\/)?ips/)
-        load(File.expand_path(path))
-      else
-        load_script(path)
-      end
+      "snippet"
     end
   end
 

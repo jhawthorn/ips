@@ -12,6 +12,7 @@ bench_time = nil
 warmup_time = nil
 debug = false
 frozen_string_literal = true
+loader = "auto"
 args = ARGV.dup
 while args.first
   case args.first
@@ -50,6 +51,9 @@ while args.first
   when "--no-frozen-string-literal"
     args.shift
     frozen_string_literal = false
+  when "--loader"
+    args.shift
+    loader = args.shift.to_s
   when "--debug"
     args.shift
     debug = true
@@ -66,7 +70,7 @@ end
 script = args.shift
 
 if script.nil? && inline_code.empty?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [<script.rb|benchmark.yml>]"
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [--loader auto|snippet|program|yaml] [<script.rb|benchmark.yml>]"
   exit 1
 end
 
@@ -200,12 +204,18 @@ if inline_code.any?
   end
   script_source << "end\n"
 else
-  script_source << "IPS.load_file(#{script.dump})\n"
+  script_source << "IPS.load_file(#{script.dump}, loader: #{loader.dump})\n"
 end
 ruby_args = ["-e", script_source]
 
 $LOAD_PATH.unshift(LIB_DIR)
 require "ips"
+
+begin
+  IPS.check_loader(loader)
+rescue ArgumentError => e
+  abort "ips: #{e.message}"
+end
 
 # Check out commits in place, never changing directory and never creating a
 # worktree, so the ruby, the bundle, and any per-directory setup stay identical

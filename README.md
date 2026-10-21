@@ -67,12 +67,21 @@ benchmarked as a whole.
 Scripts written for the [benchmark-ips](https://github.com/evanphx/benchmark-ips)
 gem (`require "benchmark/ips"` and `Benchmark.ips`) can be run with the CLI.
 
+`ips` picks how to load a file from its extension and contents. Use `--loader`
+to say so explicitly when it guesses wrong:
+
+- `auto` — the default: `yaml` for `.yml`/`.yaml`, otherwise `program` if the file looks like it uses IPS or benchmark-ips, else `snippet`
+- `snippet` — benchmark the whole file as one report
+- `program` — load the file as-is; it calls `IPS.run` (or `Benchmark.ips`) itself
+- `yaml` — a benchmark_driver style definition
+
 Options:
 
 - `--ruby VERSION` — run against a specific Ruby (repeatable)
 - `--sha REV` — also run against a commit of the current repo (repeatable; a `A..B` range expands to its commits, oldest first)
 - `-e CODE` — inline benchmark expression (repeatable)
 - `--prelude CODE` — run setup code before the benchmark (repeatable)
+- `--loader LOADER` — how to load the file: `auto`, `snippet`, `program` or `yaml` (default: `auto`)
 - `-I DIR` — add a directory to the load path (repeatable)
 - `-t SECONDS` — benchmark time (default: 5)
 - `-w SECONDS` — warmup time (default: 20% of benchmark time)
