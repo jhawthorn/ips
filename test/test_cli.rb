@@ -264,6 +264,80 @@ class TestCLI < Minitest::Test
     end
   end
 
+  def test_sha_labels_named_revs_with_their_name
+    in_git_repo do |dir|
+      script = File.join(dir, "bench.rb")
+      commit_bench(dir, script, "1 + 1")
+      first = short_sha(dir, "HEAD")
+      commit_bench(dir, script, "2 * 3")
+
+      out, status = run_cli("--sha", "HEAD~1", script, chdir: dir)
+      assert status.success?, out
+      assert_match(/times faster than (main|HEAD~1 \(#{first}\))$/, out)
+      assert_includes out, "HEAD~1 (#{first})"
+    end
+  end
+
+  def test_markdown_goes_to_stdout_alone
+    out, err, status = Bundler.with_unbundled_env do
+      Open3.capture3("ruby", "-I", LIB, EXE, "--markdown", "-e", "Object.allocate", "-e", "Object.new", "-t", "0.3", "-w", "0.1")
+    end
+    assert status.success?, err
+    assert_match(/^\| Benchmark +\| +i\/s \| +± \| vs fastest +\|\n/, out)
+    assert_match(/^\| `Object\.new` +\| /, out)
+    assert_match(/^\$ ips --markdown -e Object\.allocate -e Object\.new/, out)
+    assert_includes out, <<~MD
+      ```ruby
+      require "ips"
+
+      IPS.run do |x|
+        x.report("Object.allocate")
+        x.report("Object.new")
+      end
+      ```
+    MD
+    # The usual report still goes to stderr.
+    assert_match(/i\/s/, err)
+    assert_match(/times faster than/, err)
+  end
+
+  def test_markdown_shows_script_once_when_unchanged
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "bench.yml")
+      File.write(path, "prelude: X = [1]\nbenchmark:\n  size: X.size\n")
+      out, err, status = Bundler.with_unbundled_env do
+        Open3.capture3("ruby", "-I", LIB, EXE, "--markdown", "--prelude", "Y = 1", path, "-t", "0.2", "-w", "0.1")
+      end
+      assert status.success?, err
+      assert_includes out, "<details><summary>Benchmark code</summary>\n\n`--prelude`\n\n```ruby\nY = 1\n```\n\n`#{path}`\n\n```yaml\nprelude: X = [1]\n"
+    end
+  end
+
+  def test_markdown_sha_baseline_is_the_other_commit
+    in_git_repo do |dir|
+      script = File.join(dir, "bench.rb")
+      commit_bench(dir, script, "1 + 1")
+      first = short_sha(dir, "HEAD")
+      commit_bench(dir, script, "2 * 3")
+
+      out, err, status = Bundler.with_unbundled_env do
+        Open3.capture3("ruby", "-I", LIB, EXE, "--markdown", "--sha", first, script, chdir: dir)
+      end
+      assert status.success?, err
+      assert_match(/^\| Benchmark \| Commit +\| +i\/s \| +± \| vs `#{first}` +\|$/, out)
+      rows = out.lines.grep(/\A\| (`work`)? +\| `/)
+      assert_match(/\A\| `work` +\| `#{first}` +\|.*\| baseline +\|$/, rows[0])
+      assert_match(/\A\| +\| `main` +\|/, rows[1])
+
+      # The script changed between the commits, so both versions are shown,
+      # baseline first.
+      assert_includes out, "`#{script}` at `#{first}`\n\n```ruby\n"
+      assert_includes out, "`#{script}` at `main`\n\n```ruby\n"
+      assert_operator out.index("{ 1 + 1 }"), :<, out.index("{ 2 * 3 }")
+      assert_operator out.index("| Benchmark"), :<, out.index("<details><summary>Benchmark code</summary>")
+    end
+  end
+
   def test_sha_aborts_on_dirty_working_tree
     in_git_repo do |dir|
       script = File.join(dir, "bench.rb")

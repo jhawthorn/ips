@@ -55,6 +55,11 @@ module IPS
         yjit_enabled: hash["yjit_enabled"])
     end
 
+    def to_markdown
+      require "ips/markdown"
+      Markdown.render([[@run_label, [self]]])
+    end
+
     def self.save!(path, results)
       require "json"
 

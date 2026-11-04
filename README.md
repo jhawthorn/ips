@@ -50,6 +50,59 @@ the bundle, and any per-directory setup stay identical across every commit. The
 working tree must be clean, and the branch you started on is restored when the
 run finishes (or is interrupted).
 
+To share results in a pull request or issue, add `--markdown`. The usual
+report still prints to stderr, and stdout gets only markdown: a results
+table, then collapsed sections with the benchmark code and the environment
+(the command, `RUBY_DESCRIPTION`, the ips version). You can copy it from the
+terminal or pipe it to your clipboard:
+
+```
+$ ips --markdown --sha main bench.rb | pbcopy
+```
+
+````markdown
+| Benchmark | Commit           |      i/s |    ± | vs `main (b73c1da)`      |
+| :-------- | :--------------- | -------: | ---: | :----------------------- |
+| `work`    | `main (b73c1da)` | 626.752k | 1.1% | baseline                 |
+|           | `feature`        |  23.538M | 1.0% | **37.55 ± 0.54× faster** |
+| `noop`    | `main (b73c1da)` |  62.442M | 0.9% | baseline                 |
+|           | `feature`        |  66.992M | 2.8% | **1.07 ± 0.03× faster**  |
+
+<details><summary>Benchmark code</summary>
+
+`bench.rb`
+
+```ruby
+require_relative "lib"
+IPS.run { |x| x.report("work") { work }; x.report("noop") { } }
+```
+
+</details>
+
+<details><summary>Environment</summary>
+
+```console
+$ ips --markdown -t 1 --sha main bench.rb
+```
+
+- `ruby 4.0.9 (2026-10-23 revision 3e93b23afc) +PRISM [x86_64-linux]`
+- ips 0.5.0
+
+</details>
+````
+
+Each row is compared against the first variant: the first `--sha` commit
+(so the current checkout reads as "faster" or "slower" than `main`), or the
+first `--ruby` otherwise. With a single variant, benchmarks are compared
+against the fastest. A difference is only called faster or slower when it's
+larger than the error.
+
+The collapsed code is the script file (each version, if it differs between the
+`--sha` commits) and any `--prelude`, or for `-e` the equivalent `IPS.run`,
+which can be rerun with plain `ruby`.
+
+From the library, `IPS.run` returns a result that responds to `to_markdown`.
+
 Besides Ruby scripts that use IPS, `ips` can run YAML benchmark definitions
 and plain scripts:
 
@@ -86,6 +139,7 @@ Options:
 - `-t SECONDS` — benchmark time (default: 5)
 - `-w SECONDS` — warmup time (default: 20% of benchmark time)
 - `--save PATH` — save results to JSON (appends to existing file)
+- `--markdown` — print results as a markdown table on stdout (the usual output moves to stderr)
 - `--debug` — show compiled source, cycle counts, and per-batch timing
 - `--yjit`, `--zjit`, `--disable-gems` — passed through to Ruby
 - `-r LIB` — require a library before running

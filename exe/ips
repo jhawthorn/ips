@@ -13,6 +13,7 @@ warmup_time = nil
 debug = false
 frozen_string_literal = true
 loader = "auto"
+markdown = false
 args = ARGV.dup
 while args.first
   case args.first
@@ -57,6 +58,9 @@ while args.first
   when "--debug"
     args.shift
     debug = true
+  when "--markdown"
+    args.shift
+    markdown = true
   when "-v", "--verbose"
     args.shift
     verbose = true
@@ -70,7 +74,7 @@ end
 script = args.shift
 
 if script.nil? && inline_code.empty?
-  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [--loader auto|snippet|program|yaml] [<script.rb|benchmark.yml>]"
+  $stderr.puts "Usage: ips [--ruby VERSION ...] [--sha REV ...] [-r LIB ...] [--prelude CODE ...] [-e CODE ...] [--loader auto|snippet|program|yaml] [--markdown] [<script.rb|benchmark.yml>]"
   exit 1
 end
 
@@ -79,6 +83,10 @@ def shell_quote(arg)
   return arg if arg =~ /\A[A-Za-z0-9_\-.,:+\/@]+\z/
   "'" + arg.gsub("'", "'\\\\''") + "'"
 end
+
+# With --markdown, stdout carries only the markdown so it can be piped or
+# redirected; everything else goes to stderr.
+human = markdown ? $stderr : $stdout
 
 RUBY_DIRS = [File.expand_path("~/.rubies"), "/opt/rubies"]
 LIB_DIR = File.expand_path("../lib", __dir__)
@@ -153,18 +161,24 @@ else
   branch, branch_status = git("symbolic-ref", "--short", "HEAD")
   original_ref = branch_status.success? ? branch.strip : nil
 
-  full_shas = [original_sha]
+  # [sha, name] pairs; name is the rev as given when it was a single named
+  # rev (a branch, tag, HEAD~1...) rather than a range or a sha.
+  full_shas = [[original_sha, original_ref]]
   revs.each do |rev|
     if rev.include?("..")
-      full_shas.concat(git!("rev-list", "--reverse", rev).split("\n"))
+      git!("rev-list", "--reverse", rev).split("\n").each { |sha| full_shas << [sha, nil] }
     else
-      full_shas << git!("rev-parse", "--verify", "#{rev}^{commit}").strip
+      sha = git!("rev-parse", "--verify", "#{rev}^{commit}").strip
+      full_shas << [sha, sha.start_with?(rev.downcase) ? nil : rev]
     end
   end
-  full_shas.uniq!
+  full_shas.uniq!(&:first)
 
-  checkouts = full_shas.map { |sha| [git!("rev-parse", "--short", sha).strip, sha] }
-  # Prefer the branch name for the baseline when we have one.
+  checkouts = full_shas.map { |sha, name|
+    short = git!("rev-parse", "--short", sha).strip
+    [name ? "#{name} (#{short})" : short, sha]
+  }
+  # Prefer the plain branch name for the baseline when we have one.
   checkouts[0][0] = original_ref if original_ref
 end
 
@@ -225,7 +239,7 @@ moved = false
 
 checkout = lambda do |sha|
   next if sha.nil? || sha == current_sha
-  $stdout.puts "git checkout --detach #{sha}" if verbose
+  human.puts "git checkout --detach #{sha}" if verbose
   out, status = git("checkout", "--detach", sha)
   abort "git checkout --detach #{sha} failed:\n#{out}" unless status.success?
   moved = true
@@ -250,12 +264,17 @@ trap("INT") do
 end if original_sha
 
 results_by_variant = variants.map { [] }
+# The script as it was in each variant's checkout, for --markdown.
+script_sources = []
 quiet = runs > 1
 
 begin
   runs.times do |run_index|
     variants.each_with_index do |(label, ruby, extra_flags, sha), variant_index|
       checkout.call(sha)
+      if markdown && script && run_index == 0 && File.file?(script)
+        script_sources[variant_index] = File.read(script)
+      end
 
       if ruby
         env = { "GEM_HOME" => nil, "GEM_PATH" => nil }
@@ -267,20 +286,20 @@ begin
       cmd = [ruby, *extra_flags, *ruby_flags]
       cmd << "-v" unless quiet
       cmd.push("-I", LIB_DIR, "-I", SHIM_DIR, *ruby_args)
-      $stdout.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
+      human.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
 
       rd, wr = IO.pipe
       spawn_opts = { 3 => wr }
-      spawn_opts[:out] = File::NULL if quiet
+      spawn_opts[:out] = quiet ? File::NULL : human
 
       pid = spawn(env, *cmd, **spawn_opts)
       wr.close
 
       if quiet
-        $stdout.print "\rRun #{run_index + 1}/#{runs}"
-        $stdout.print " (#{label})" if label
-        $stdout.print "..."
-        $stdout.flush
+        human.print "\rRun #{run_index + 1}/#{runs}"
+        human.print " (#{label})" if label
+        human.print "..."
+        human.flush
       end
 
       until rd.eof?
@@ -296,7 +315,7 @@ begin
         cmd_str = cmd.map { |a| shell_quote(a) }.join(" ")
         abort "Command failed (exit #{status.exitstatus}): #{cmd_str}"
       end
-      puts unless quiet
+      human.puts unless quiet
     end
   end
 ensure
@@ -307,9 +326,60 @@ $stderr.puts if quiet
 results = results_by_variant.flatten
 
 if runs > 1 && results.any?
-  IPS::Result.compare_aggregate(results_by_variant, out: $stdout)
+  IPS::Result.compare_aggregate(results_by_variant, out: human)
 else
-  IPS::Result.compare(results)
+  IPS::Result.compare(results, out: human)
+end
+
+if markdown && results.any?
+  require "ips/markdown"
+  variant_header =
+    if versions.any? && revs.any? then "Variant"
+    elsif revs.any? then "Commit"
+    else "Ruby"
+    end
+  command = ["ips", *ARGV].map { |a| shell_quote(a) }.join(" ")
+  md_variants = variants.map(&:first).zip(results_by_variant)
+  # In a pull request the question is how the current checkout compares to
+  # the commits it was run against, so the --sha commits come first and the
+  # first of them is the baseline. A range then reads oldest to newest.
+  md_variants.rotate!(rubies.size) if revs.any?
+
+  # Show what was measured. For -e, the equivalent IPS.run (a string report
+  # is compiled the same way -e is), which can be rerun with plain `ruby`; for a file, its contents, once per distinct version
+  # when it differs between commits.
+  sources = []
+  if inline_code.any?
+    src = +"require \"ips\"\n\n"
+    prelude.each { |code| src << code << "\n" }
+    src << "\n" if prelude.any?
+    src << "IPS.run do |x|\n"
+    inline_code.each { |code| src << "  x.report(#{code.inspect})\n" }
+    src << "end\n"
+    sources << [nil, "ruby", src]
+  else
+    sources << ["`--prelude`", "ruby", prelude.join("\n")] if prelude.any?
+    yaml = loader == "yaml" || (loader == "auto" && script.match?(/\.ya?ml\z/))
+    lang = yaml ? "yaml" : "ruby"
+    order = variants.each_index.to_a
+    order.rotate!(rubies.size) if revs.any?
+    versions_of_script = order.map { |i| [variants[i][0], script_sources[i]] }
+      .reject { |_, src| src.nil? }
+      .group_by(&:last)
+    if versions_of_script.size == 1
+      sources << [IPS::Markdown.code(script), lang, versions_of_script.keys.first]
+    else
+      versions_of_script.each do |src, pairs|
+        at = pairs.map { |label, _| IPS::Markdown.code(label) }.join(", ")
+        sources << ["#{IPS::Markdown.code(script)} at #{at}", lang, src]
+      end
+    end
+  end
+
+  md = IPS::Markdown.render(md_variants,
+    runs: runs, command: command, variant_header: variant_header, sources: sources)
+  human.puts
+  $stdout.print md
 end
 
 if save_path && results.any?
