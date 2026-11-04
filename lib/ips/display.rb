@@ -1,10 +1,5 @@
 # frozen_string_literal: true
 
-begin
-  require "io/console"
-rescue LoadError
-end
-
 module IPS
   class Display
     BAR_WIDTH = 30
@@ -79,6 +74,14 @@ module IPS
     end
 
     def terminal_wide_enough?
+      # Loaded here rather than with ips, which is required before the
+      # benchmark script runs: io-console is a default gem, and activating it
+      # before the script's `require "bundler/setup"` fails when the bundle
+      # locks a different version.
+      begin
+        require "io/console"
+      rescue LoadError
+      end
       return true unless @out.respond_to?(:winsize)
       # label + ": " + estimate + " " + bar + " ETA Ns "
       min_width = @max_label + 2 + 14 + 1 + BAR_WIDTH + 8

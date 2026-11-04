@@ -2,9 +2,17 @@
 
 require "test_helper"
 require "stringio"
+require "open3"
 
 class TestDisplay < Minitest::Test
   NS = IPS::Timing::NANOSECONDS_PER_SECOND
+
+  def test_requiring_ips_does_not_load_io_console
+    out, status = Open3.capture2e("ruby", "-I", File.expand_path("../lib", __dir__), "-e",
+      'require "ips"; print $LOADED_FEATURES.grep(%r{/io/console}).inspect')
+    assert status.success?, out
+    assert_equal "[]", out
+  end
 
   def test_format_ips_billions
     assert_equal "1.000B", IPS::Display.format_ips(1_000_000_000)
