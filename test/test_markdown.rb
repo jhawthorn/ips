@@ -48,12 +48,12 @@ class TestMarkdown < Minitest::Test
       ["abc123", [result(entry("a", 3_000), entry("b", 1_000))]]
     ], variant_header: "Commit")
     rows = table_rows(md)
-    assert_equal ["Benchmark", "Commit", "i/s", "±", "vs `main`"], rows[0]
-    assert_equal ["`a`", "`main`", "1.000k", "0.0%", "baseline"], rows[2]
+    assert_equal ["Benchmark", "Commit", "i/s", "±", "vs main"], rows[0]
+    assert_equal ["`a`", "main", "1.000k", "0.0%", "baseline"], rows[2]
     assert_equal 5, rows[1].size
-    assert_equal ["", "`abc123`", "3.000k", "0.0%", "**3.00 ± 0.00× faster**"], rows[3]
-    assert_equal ["`b`", "`main`", "2.000k", "0.0%", "baseline"], rows[4]
-    assert_equal ["", "`abc123`", "1.000k", "0.0%", "**2.00 ± 0.00× slower**"], rows[5]
+    assert_equal ["", "abc123", "3.000k", "0.0%", "**3.00 ± 0.00× faster**"], rows[3]
+    assert_equal ["`b`", "main", "2.000k", "0.0%", "baseline"], rows[4]
+    assert_equal ["", "abc123", "1.000k", "0.0%", "**2.00 ± 0.00× slower**"], rows[5]
   end
 
   def test_sources_are_collapsed_under_the_table
@@ -97,9 +97,15 @@ class TestMarkdown < Minitest::Test
     ], command: "ips --ruby 3.4 --ruby 4.0 -e x")
     assert_includes md, "<details><summary>Environment</summary>"
     assert_includes md, "$ ips --ruby 3.4 --ruby 4.0 -e x\n"
-    assert_includes md, "- `3.4`: `ruby 3.4.0`\n"
-    assert_includes md, "- `4.0`: `ruby 4.0.0`\n"
+    assert_includes md, "- 3.4: `ruby 3.4.0`\n"
+    assert_includes md, "- 4.0: `ruby 4.0.0`\n"
     assert_includes md, "- ips #{IPS::VERSION}\n"
+  end
+
+  def test_text_is_plain_and_table_safe
+    assert_equal "rails/main (7a78da5a55)", IPS::Markdown.text("rails/main (7a78da5a55)")
+    assert_equal "a\\|b\\_c\\*d", IPS::Markdown.text("a|b_c*d")
+    assert_equal "a b", IPS::Markdown.text("a\n  b")
   end
 
   def test_code_escapes_for_table_cells

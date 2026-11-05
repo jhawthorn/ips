@@ -324,10 +324,10 @@ class TestCLI < Minitest::Test
         Open3.capture3("ruby", "-I", LIB, EXE, "--markdown", "--sha", first, script, chdir: dir)
       end
       assert status.success?, err
-      assert_match(/^\| Benchmark \| Commit +\| +i\/s \| +± \| vs `#{first}` +\|$/, out)
-      rows = out.lines.grep(/\A\| (`work`)? +\| `/)
-      assert_match(/\A\| `work` +\| `#{first}` +\|.*\| baseline +\|$/, rows[0])
-      assert_match(/\A\| +\| `main` +\|/, rows[1])
+      assert_match(/^\| Benchmark \| Commit +\| +i\/s \| +± \| vs #{first} +\|$/, out)
+      rows = out.lines.grep(/\A\|/)[2..]
+      assert_match(/\A\| `work` +\| #{first} +\|.*\| baseline +\|$/, rows[0])
+      assert_match(/\A\| +\| main +\|/, rows[1])
 
       # The script changed between the commits, so both versions are shown,
       # baseline first.

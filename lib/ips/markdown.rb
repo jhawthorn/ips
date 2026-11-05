@@ -58,7 +58,7 @@ module IPS
     # The CLI puts the --sha commits first, so that's the first of those, or
     # the first --ruby when there are no commits.
     def matrix_table(variants, benchmarks, variant_header)
-      header = ["Benchmark", variant_header, "i/s", "±", "vs #{code(variants.first[0])}"]
+      header = ["Benchmark", variant_header, "i/s", "±", "vs #{text(variants.first[0])}"]
       align = [:left, :left, :right, :right, :left]
 
       rows = []
@@ -67,7 +67,7 @@ module IPS
         variants.each_with_index do |(label, _, pairs), j|
           stat = pairs[i]&.last
           next unless stat
-          rows << [j == 0 ? code(bench) : "", code(label), Display.format_ips(stat.ips), error(stat),
+          rows << [j == 0 ? code(bench) : "", text(label), Display.format_ips(stat.ips), error(stat),
             j == 0 || base.nil? ? "baseline" : ratio(stat, base)]
         end
       end
@@ -117,7 +117,7 @@ module IPS
         lines << "- #{code(descriptions.first[1])}"
       else
         descriptions.each do |label, desc|
-          lines << "- #{code(label)}: #{code(desc)}"
+          lines << "- #{text(label)}: #{code(desc)}"
         end
       end
       lines << "- #{runs} runs, each reported value is the mean across runs" if runs > 1
@@ -166,6 +166,14 @@ module IPS
       fence = "`" * (longest + 1)
       source = source.end_with?("\n") ? source : "#{source}\n"
       "#{fence}#{lang}\n#{source}#{fence}\n"
+    end
+
+    # Plain text that is safe inside a table cell. Used for variant labels
+    # rather than a code span, because a label like `main (abc1234)` holds a
+    # commit SHA, and GitHub links those; a link inside a code span renders
+    # as a mess.
+    def text(text)
+      text.to_s.gsub(/\s*\n\s*/, " ").strip.gsub(/[\\`*_\[\]<>|~]/) { "\\#{$&}" }
     end
 
     # An inline code span that is safe inside a table cell.
