@@ -24,6 +24,15 @@ class TestCLI < Minitest::Test
     assert_match(/times faster than/, out)
   end
 
+  def test_prints_ruby_description_without_verbose_warnings
+    out, err, status = Bundler.with_unbundled_env do
+      Open3.capture3("ruby", "-I", LIB, EXE, "-e", "nil", "-t", "0.1", "-w", "0.05")
+    end
+    assert status.success?, err
+    assert_includes out, RUBY_DESCRIPTION
+    refute_match(/warning/, err)
+  end
+
   def test_script_mode
     Dir.mktmpdir do |dir|
       script = File.join(dir, "bench.rb")

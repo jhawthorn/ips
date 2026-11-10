@@ -207,6 +207,7 @@ overrides << "frozen_string_literal: false" unless frozen_string_literal
 
 script_source = +""
 script_source << "# frozen_string_literal: true\n" if frozen_string_literal
+script_source << "puts RUBY_DESCRIPTION\n" unless runs > 1
 script_source << "require 'ips'\n"
 script_source << "IPS.overrides = { #{overrides.join(", ")} }\n"
 prelude.each { |code| script_source << code << "\n" }
@@ -284,7 +285,6 @@ begin
       end
 
       cmd = [ruby, *extra_flags, *ruby_flags]
-      cmd << "-v" unless quiet
       cmd.push("-I", LIB_DIR, "-I", SHIM_DIR, *ruby_args)
       human.puts cmd.map { |a| shell_quote(a) }.join(" ") if verbose
 
